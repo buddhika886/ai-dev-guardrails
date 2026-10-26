@@ -1,0 +1,41 @@
+# Dependencies
+node_modules/
+
+# Build output
+dist/
+out/
+build/
+.next/
+
+# Secrets and local env (never commit; templates with .example are fine)
+.env
+.env.*
+!.env.example
+.dev.vars
+.dev.vars.*
+!.dev.vars.example
+*.pem
+credentials*.json
+
+# Logs and OS cruft
+*.log
+.DS_Store
+
+# Editor
+.vscode/
+.idea/
+
+# Claude Code local (per-user) settings
+.claude/settings.local.json
+
+# OpenRouter routing profile: holds a live sk-or- key. The committed
+# .claude/openrouter.settings.json.example beside it is the template to copy.
+.claude/openrouter.settings.json
+
+# In-progress development notes. Temporary: remove this entry (and the file, or promote its durable
+# parts into docs/) once the template reaches v1.
+DEVLOG.md
+
+# Personal re-orientation guide (what the project is, its controls, where it stands). Same lifetime
+# as DEVLOG.md: remove both entries together at v1.
+PROJECT-GUIDE.md

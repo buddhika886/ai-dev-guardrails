@@ -1,0 +1,56 @@
+# gitleaks configuration. Extends the default ruleset with high-signal rules for your own secret
+# shapes, and allowlists known-safe placeholders and local dev values.
+#
+# The pre-commit hook runs `gitleaks protect --staged`; CI runs `gitleaks detect` over full history
+# with a checksum-pinned binary (see ci/verify.yml). This file is used by both.
+
+[extend]
+useDefault = true
+
+# ---- CONFIG: add rules for YOUR secret shapes ----
+# This one is a template. Uncomment and fill the regex for the secret shapes your project actually
+# uses, then commit. Keep them high-signal so they do not fire on ordinary code.
+#
+# [[rules]]
+# id = "provider-secret-key"
+# description = "<Provider> secret key"
+# # Replace with the distinctive prefix/shape of your provider's secret key (e.g. sk_live_...).
+# regex = '''<distinctive secret prefix/shape>'''
+# tags = ["<provider>"]
+# --------------------------------------------------
+
+# ---- Armed by default: high-signal shapes ----
+# Each matches a distinctive structure (a fixed prefix and length, or a credential inside a URL), so
+# they do not fire on ordinary code.
+
+[[rules]]
+id = "credential-in-connection-string"
+description = "Credentials embedded in a connection string (scheme://user:password@host)"
+# Armed by default because nothing else catches it: a password inside a database URL is neither a
+# key = "value" assignment nor a recognised token shape. Requires 8+ characters and no angle
+# brackets, so <password> and ENCODED placeholders do not trip it; local dev values are cleared by
+# the allowlist below.
+regex = '''[a-zA-Z][a-zA-Z0-9+.-]*://[^\s:/@"'<>]+:[^\s@/"'<>]{8,}@[^\s"'<>]+'''
+tags = ["database", "connection-string"]
+
+[[rules]]
+id = "openrouter-api-key"
+description = "OpenRouter API key"
+regex = '''sk-or-v1-[0-9a-f]{64}'''
+tags = ["openrouter", "llm-gateway"]
+# --------------------------------------------------
+
+[allowlist]
+description = "Committed placeholders and local dev values that are NOT real secrets"
+regexes = [
+  # Obvious test/example keys and local-only tokens. Add project-specific safe values here.
+  '''(?i)(example|dummy|test|placeholder|changeme|your[-_]?key[-_]?here)''',
+  '''local_dev_only''',
+  '''(?i)localhost(:\d+)?''',
+  '''127\.0\.0\.1''',
+]
+paths = [
+  '''\.env\.example$''',
+  '''\.dev\.vars\.example$''',
+  '''(^|/)docs/''',
+]

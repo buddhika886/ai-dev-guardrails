@@ -1,0 +1,56 @@
+# Lefthook: local git hooks for THIS repo (Layer 3), the template's own backstop.
+#
+# Generated projects get `.template/core/lefthook.yml`, which is a different file: it has a real
+# build and typecheck to pay for, so it splits fast checks from expensive ones. This repo has
+# neither. Its entire check set runs in about five seconds.
+#
+# Install once per clone:  lefthook install
+#
+# Missing tools soft-skip with a message rather than blocking the commit, because Layer 4 (CI) is
+# the authority and re-runs all of this on a clean checkout. A skip that announces itself is the
+# rule here, same as the SKIPPED lines in the guardrails script: a reader must never have to guess
+# whether a check passed or never ran.
+
+pre-commit:
+  parallel: true
+  commands:
+    gitleaks-staged:
+      # Secrets, before they enter a commit. The pre-push and CI scans cover full history, but by
+      # then a key is already written down. This is the one that catches it while it is still cheap.
+      run: |
+        if command -v gitleaks >/dev/null 2>&1; then
+          gitleaks protect --staged --config .gitleaks.toml --redact --exit-code 1 || {
+            echo "gitleaks: staged changes contain a potential secret. Commit blocked."; exit 1;
+          }
+        else
+          echo "SKIPPED: gitleaks not installed locally (CI still enforces it). See the README."
+        fi
+    shellcheck:
+      run: |
+        if command -v shellcheck >/dev/null 2>&1; then
+          shellcheck scripts/*.sh .template/core/scripts/*.sh tests/*.sh tests/lib/*.sh
+        else
+          echo "SKIPPED: shellcheck not installed locally (CI still enforces it). See the README."
+        fi
+    actionlint:
+      run: |
+        if command -v actionlint >/dev/null 2>&1; then
+          actionlint .github/workflows/ci.yml .template/core/ci/verify.yml
+        else
+          echo "SKIPPED: actionlint not installed locally (CI still enforces it). See the README."
+        fi
+    template-integrity:
+      # Every {{TOKEN}} under .template/ must appear in the bootstrap token table, and vice versa.
+      # No external dependency, so this one never skips.
+      run: bash scripts/template-integrity.sh
+
+pre-push:
+  commands:
+    behaviour:
+      # The behaviour suite bootstraps throwaway projects and asserts each installed guardrail
+      # catches its own violation. It runs in about five seconds, so speed is not why it sits here
+      # rather than in pre-commit: it runs `git clean -fd` and `git reset --hard` inside those
+      # throwaway projects, and a hook that does that while a commit is in flight is not a hook
+      # worth having. The case scripts do `cd "$PROJ" || exit 2` first and the risk is contained,
+      # but "contained" is the wrong bar for a destructive command running mid-commit.
+      run: bash tests/run.sh

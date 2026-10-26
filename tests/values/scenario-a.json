@@ -1,0 +1,40 @@
+{
+  "_comment": "Scenario A, the fully-armed case: TypeScript + Next.js, single package, regulated data (security tier on), production exists, database with a committed schema dump, governance tier on. Every guardrail is active, so this scenario is where the negative tests live.",
+
+  "PROJECT_NAME": "acme-portal",
+  "LANGUAGE_SPELLING": "British English",
+  "SOURCE_OF_TRUTH_DOCS": "docs/PRD.md: product requirements\n- docs/runbook.md: operational runbook",
+  "LOCAL_TOOLCHAIN": "Node 20 + npm",
+
+  "LANG_LINT_GLOB": "*.{ts,tsx,js,jsx,json,jsonc}",
+  "LANG_LINT_CMD": "npx --no-install biome check --no-errors-on-unmatched",
+  "UNSAFE_SQL": "(\\.unsafe\\(|\\.raw\\()",
+  "STORAGE_PATTERNS": "localStorage|sessionStorage|indexedDB|document\\.cookie",
+
+  "PUBLIC_VAR_PREFIX": "NEXT_PUBLIC_",
+  "BUNDLE_DIR": "out",
+  "CLIENT_DIR": "src/app",
+  "SERVER_DIRS": "src/server src/app/api",
+  "MIGRATIONS_DIR": "migrations",
+
+  "SECRET_FILE_PATTERNS": ".*\\.env$|.*\\.env\\..*|.*\\.dev\\.vars$|.*\\.pem$|.*\\.key$|.*\\.p12$|.*\\.pfx$|.*\\.jks$|.*\\.keystore$|.*\\.ppk$|(^|/)id_(rsa|dsa|ecdsa|ed25519)$|.*credentials.*\\.json$|.*service-account.*\\.json$|.*\\.local$",
+  "ALLOWED_TRACKED": "\\.env\\.example$|\\.dev\\.vars\\.example$",
+  "SECRET_FILES": ".env, .dev.vars",
+  "PUBLIC_VAR": "NEXT_PUBLIC_APP_URL",
+  "PUBLIC_VAR_ALLOWLIST": "NEXT_PUBLIC_APP_URL",
+  "SECRET_VAR_NAMES": "DATABASE_URL SESSION_SECRET STRIPE_SECRET_KEY",
+  "BUNDLE_LEAK_PATTERNS": "DATABASE_URL|SESSION_SECRET|sk_live_|postgres://",
+
+  "SCHEMA_DUMP_CMD": "cat db/schema.source.sql",
+  "SCHEMA_DUMP_FILE": "db/schema.sql",
+
+  "PROD_HOST": "db.prod.acme.example",
+  "PROD_APPROVED_PATH": "the reviewed deploy workflow in GitHub Actions",
+  "PROD_GUARD_PATTERNS": "db\\.prod\\.acme\\.example|vercel[[:space:]]+(deploy|link)|wrangler[[:space:]]+deploy",
+  "PROD_ENV_VAR_NAMES": "PROD_DATABASE_URL DEPLOY_TOKEN",
+
+  "GOVERNANCE_ENABLED": "on",
+  "BOOTSTRAP_DATE": "2026-10-26",
+
+  "_LICENSE_HOLDER": ""
+}

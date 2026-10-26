@@ -1,0 +1,14 @@
+# Keeps the SHA-pinned GitHub Actions and the npm dependencies current. Each update arrives as a pull
+# request and goes through the same CI, guardrails and review as any other change: an update is a
+# change like any other, never merged unreviewed.
+version: 2
+updates:
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+  - package-ecosystem: npm
+    directory: /
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 5

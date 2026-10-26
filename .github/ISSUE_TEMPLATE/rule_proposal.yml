@@ -1,0 +1,39 @@
+name: Propose a rule or check
+description: Suggest a new guardrail, a new command for the guard, or a change to an existing rule.
+labels: [proposal]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Rules here ship into every project generated from the template, so each one needs a clear
+        problem, a low false-positive rate, and a test. Please open a proposal before writing a large
+        change, so the design can be agreed first.
+  - type: textarea
+    id: problem
+    attributes:
+      label: The problem
+      description: What goes wrong today, and how often? A concrete example helps most.
+    validations:
+      required: true
+  - type: textarea
+    id: rule
+    attributes:
+      label: The proposed rule
+      description: What should be blocked, asked about or checked, and where (guard, guardrail check, gitleaks, CI)?
+    validations:
+      required: true
+  - type: textarea
+    id: ordinary-work
+    attributes:
+      label: Ordinary work it must not block
+      description: Commands or code that look similar but are fine. A rule that blocks normal work gets switched off.
+    validations:
+      required: true
+  - type: dropdown
+    id: answer
+    attributes:
+      label: Block or ask?
+      options:
+        - Ask (a person may reasonably want to do this)
+        - Block (should never happen from this machine)
+        - Not applicable (a guardrail check, not a guard rule)

@@ -1,0 +1,40 @@
+{
+  "_comment": "Scenario B, the sparse case: a plain TypeScript library with no framework, no production yet, no database and no bundle. It fills every empty-allowed token with the empty string, which is the dangerous path: an empty regex can turn a check into a no-op that still prints a tick. These tests assert the affected checks announce themselves as SKIPPED and that the remaining ones still bite.",
+
+  "PROJECT_NAME": "sig-lib",
+  "LANGUAGE_SPELLING": "British English",
+  "SOURCE_OF_TRUTH_DOCS": "docs/spec.md: the library specification",
+  "LOCAL_TOOLCHAIN": "Node 20 + npm",
+
+  "LANG_LINT_GLOB": "*.{ts,tsx,js,jsx,json,jsonc}",
+  "LANG_LINT_CMD": "npx --no-install biome check --no-errors-on-unmatched",
+  "UNSAFE_SQL": "(\\.unsafe\\(|\\.raw\\()",
+  "STORAGE_PATTERNS": "localStorage|sessionStorage|indexedDB|document\\.cookie",
+
+  "PUBLIC_VAR_PREFIX": "",
+  "BUNDLE_DIR": "",
+  "CLIENT_DIR": "src/client",
+  "SERVER_DIRS": "src/core",
+  "MIGRATIONS_DIR": "",
+
+  "SECRET_FILE_PATTERNS": ".*\\.env$|.*\\.env\\..*|.*\\.pem$|.*\\.key$|.*credentials.*\\.json$",
+  "ALLOWED_TRACKED": "\\.env\\.example$",
+  "SECRET_FILES": ".env",
+  "PUBLIC_VAR": "(none; this library reads no public env vars)",
+  "PUBLIC_VAR_ALLOWLIST": "",
+  "SECRET_VAR_NAMES": "SIGNING_KEY",
+  "BUNDLE_LEAK_PATTERNS": "SIGNING_KEY",
+
+  "SCHEMA_DUMP_CMD": "",
+  "SCHEMA_DUMP_FILE": "",
+
+  "PROD_HOST": "(no production yet)",
+  "PROD_APPROVED_PATH": "(to be defined)",
+  "PROD_GUARD_PATTERNS": "",
+  "PROD_ENV_VAR_NAMES": "",
+
+  "GOVERNANCE_ENABLED": "off",
+  "BOOTSTRAP_DATE": "2026-10-26",
+
+  "_LICENSE_HOLDER": "Sig Lib authors"
+}

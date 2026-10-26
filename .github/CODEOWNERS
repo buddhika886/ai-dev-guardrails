@@ -1,0 +1,13 @@
+# Every change needs a maintainer's review. With branch protection set to "require review from Code
+# Owners", these entries are what make contribution gated.
+* @buddhika886
+
+# The enforcement files: a mistake here silently weakens every project generated from the template.
+/.template/core/scripts/ @buddhika886
+/.template/core/settings.json @buddhika886
+/.template/core/.gitleaks.toml @buddhika886
+/.template/core/ci/ @buddhika886
+/.claude/commands/bootstrap.md @buddhika886
+/.github/ @buddhika886
+/.gitleaks.toml @buddhika886
+/SECURITY.md @buddhika886

@@ -1,0 +1,10 @@
+{
+  "_comment": "Bootstrap merges this 'scripts' block into the project's package.json. 'build' is a placeholder you must set by hand (bootstrap cannot infer your bundler); everything else is ready to run.",
+  "scripts": {
+    "typecheck": "tsc -p . --noEmit",
+    "lint": "biome check .",
+    "format": "biome format --write .",
+    "build": "echo 'TODO: set your build command (e.g. next build, vite build) then remove this line' && exit 1",
+    "guardrails": "bash scripts/ci-guardrails.sh"
+  }
+}

@@ -1,0 +1,128 @@
+# The template obeys its own guardrails. This workflow is the template repo's OWN CI: it does not
+# run the bootstrapped project's checks (those live in .template/core/ci/verify.yml). It shellchecks
+# the scripts, actionlints the workflows (including the template's verify.yml), runs the
+# template-integrity token check, and runs the behaviour tests.
+#
+# The first three jobs check that the template is well-formed, `secrets` checks that nothing
+# confidential reached the history, `dco` checks every PR commit is signed off, and only `behaviour`
+# checks that it WORKS.
+# It bootstraps throwaway projects from the templates and asserts each installed guardrail catches its
+# own violation, because a guard that has quietly stopped guarding passes every syntax check there is.
+
+name: CI
+
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  shellcheck:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+      - name: shellcheck all scripts
+        run: shellcheck scripts/*.sh .template/core/scripts/*.sh tests/*.sh tests/lib/*.sh
+
+  actionlint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+      - name: Install actionlint (checksum pinned in this file)
+        env:
+          # Same pattern as gitleaks below: download the release binary and check it against a
+          # sha256 reviewed when the version was bumped, rather than running a downloaded install
+          # script. To bump: take the linux_amd64 line from that release's checksums file.
+          VERSION: "1.7.7"
+          SHA256: "023070a287cd8cccd71515fedc843f1985bf96c436b7effaecce67290e7e0757"
+        run: |
+          set -euo pipefail
+          TARBALL="actionlint_${VERSION}_linux_amd64.tar.gz"
+          curl -sSLo "$TARBALL" "https://github.com/rhysd/actionlint/releases/download/v${VERSION}/${TARBALL}"
+          echo "${SHA256}  ${TARBALL}" | sha256sum -c -
+          tar -xzf "$TARBALL" actionlint
+      - name: actionlint (this workflow and the template's verify.yml)
+        run: ./actionlint -color .github/workflows/ci.yml .template/core/ci/verify.yml
+
+  template-integrity:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+      - name: token contract (.template <-> bootstrap token table)
+        run: bash scripts/template-integrity.sh
+
+  secrets:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        with:
+          fetch-depth: 0 # full history: a key removed in a later commit is still a leaked key
+      - name: Install gitleaks (checksum pinned in this file)
+        env:
+          # Pinned to the same release as .template/core/ci/verify.yml. Keep the two in step when
+          # bumping: download that release's gitleaks_<VERSION>_checksums.txt, copy the sha256 for
+          # the linux_x64 tarball, and update both files. We pin the checksum LITERAL rather than
+          # trusting the release's checksums.txt at build time, so a swapped asset cannot pass.
+          VERSION: "8.21.2"
+          SHA256: "5bc41815076e6ed6ef8fbecc9d9b75bcae31f39029ceb55da08086315316e3ba"
+        run: |
+          set -euo pipefail
+          TARBALL="gitleaks_${VERSION}_linux_x64.tar.gz"
+          URL="https://github.com/gitleaks/gitleaks/releases/download/v${VERSION}/${TARBALL}"
+          curl -sSLo "$TARBALL" "$URL"
+          echo "${SHA256}  ${TARBALL}" | sha256sum -c -
+          tar -xzf "$TARBALL" gitleaks
+          sudo install gitleaks /usr/local/bin/gitleaks
+          gitleaks version
+      - name: Scan for secrets (full history)
+        run: gitleaks detect --source . --config .gitleaks.toml --redact --verbose --exit-code 1
+      - name: The config must catch real secrets and ignore the committed placeholders
+        # A clean scan proves nothing on its own: an over-broad allowlist is also clean. These cases
+        # run here rather than in `behaviour` because this is the job that has gitleaks installed.
+        run: bash tests/gitleaks-config-cases.sh
+
+  dco:
+    # Gated contribution: every commit in a pull request carries a Developer Certificate of Origin
+    # sign-off (git commit -s), certifying the contributor has the right to submit it under the
+    # project's licence. Skipped on pushes to main, which only ever arrive through a reviewed PR.
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        with:
+          fetch-depth: 0
+      - name: Every commit is signed off
+        env:
+          BASE: ${{ github.event.pull_request.base.sha }}
+          HEAD: ${{ github.event.pull_request.head.sha }}
+        run: |
+          set -euo pipefail
+          missing=0
+          for c in $(git rev-list --no-merges "$BASE..$HEAD"); do
+            if ! git log -1 --format=%B "$c" | grep -qE '^Signed-off-by: .+ <.+>$'; then
+              echo "::error::commit $(git log -1 --format=%h "$c") has no Signed-off-by line"
+              missing=1
+            fi
+          done
+          if [ "$missing" -ne 0 ]; then
+            echo "Sign your commits with: git commit -s"
+            echo "To fix existing ones: git rebase --signoff $BASE, then push again."
+            exit 1
+          fi
+          echo "All commits signed off."
+
+  behaviour:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+      # No npm cache: this repo has no package.json of its own. Node is here only so the tests can
+      # fill tokens and build hook payloads.
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version: '20'
+      - name: bootstrap throwaway projects and test the installed guardrails
+        run: bash tests/run.sh

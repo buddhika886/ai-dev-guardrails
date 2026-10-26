@@ -1,0 +1,3 @@
+# No blank issues: every report goes through a template, so it arrives with what is needed to act on
+# it. GitHub adds a "Report a security vulnerability" link automatically because SECURITY.md exists.
+blank_issues_enabled: false

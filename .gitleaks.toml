@@ -1,0 +1,35 @@
+# gitleaks configuration for THIS repo (the template itself), not for generated projects.
+#
+# Generated projects get `.template/core/.gitleaks.toml`, a different file with different concerns:
+# it guards an application with a database and a bundle. This repo guards shell scripts, prose, and
+# fixtures that violate rules on purpose.
+#
+# Layer 3 (`lefthook.yml`) runs `gitleaks protect --staged` with this file before a commit lands.
+# Layer 4 (`.github/workflows/ci.yml`) runs `gitleaks detect` over full history with a
+# checksum-pinned binary. Both use this file, so a rule added here is enforced in both places.
+
+[extend]
+useDefault = true
+
+# The same rule the template ships to generated projects. Armed here too, because a live OpenRouter
+# key sits in this working directory as soon as a contributor copies
+# `.claude/openrouter.settings.json.example` to its real path. See the README.
+[[rules]]
+id = "openrouter-api-key"
+description = "OpenRouter API key"
+regex = '''sk-or-v1-[0-9a-f]{64}'''
+tags = ["openrouter", "llm-gateway"]
+
+# ---- No allowlist, deliberately ----
+# The obvious move here was to copy the template's allowlist across: skip `tests/` because it
+# manufactures violating fixtures, skip `.template/` because it holds patterns describing secret
+# shapes, skip `docs/` because it is prose about secrets. Every one of those was measured against
+# this repo and none was load-bearing: `gitleaks detect` over full history and over the working tree
+# is clean with no allowlist at all. The fixtures the behaviour suite plants are written to a temp
+# directory outside this repo, so gitleaks never sees them.
+#
+# An allowlist entry is a hole, and a hole nothing needs is a hole that only ever costs. `^tests/`
+# would have meant a real key committed under `tests/` was invisible to both layers.
+#
+# So this starts closed. When something legitimate does trip it, add the NARROWEST entry that clears
+# it, with a comment saying what and why, rather than reinstating a directory-wide skip.

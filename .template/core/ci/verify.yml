@@ -1,0 +1,75 @@
+# CI (Layer 4) is the authority. Re-runs everything on a clean checkout so nothing merges on a
+# "works on my machine". /bootstrap copies this to .github/workflows/ci.yml.
+#
+# Parity with local: the `verify` job runs the same commands as the Lefthook pre-push hook
+# (typecheck, build, guardrails) plus lint, and the `secrets` job runs the same gitleaks scan as the
+# pre-commit hook but over full history. If you change a check here, change it in lefthook.yml too.
+#
+# Enable branch protection on main: require both jobs to pass and at least one review; disallow
+# force-push.
+#
+# Actions are pinned to full commit SHAs (with the release as a comment), so a moved or hijacked tag
+# cannot change what runs. .github/dependabot.yml proposes updates to the pins.
+
+name: CI
+
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        with:
+          fetch-depth: 0 # full history so the additive-migration guardrail can diff vs the base ref
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+      - run: npm ci
+      - run: npm run typecheck
+      - run: npm run lint
+      - run: npm run build
+      - name: Guardrails (repo security rules + schema truth)
+        env:
+          GUARDRAILS_BASE: origin/${{ github.base_ref || 'main' }}
+          # Client identifiers that must never be committed, one regex per line. Set it as a
+          # repository secret so the list itself is never committed; check [9] reports SKIPPED
+          # while it is unset. GitHub masks secret values in logs, and the check prints only
+          # path:line, never the match.
+          GUARDRAILS_DENYLIST: ${{ secrets.GUARDRAILS_DENYLIST }}
+        run: npm run guardrails
+
+  secrets:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        with:
+          fetch-depth: 0
+      - name: Install gitleaks (checksum pinned in this file)
+        env:
+          # ---- Pinned release. To bump: pick a new version, download that release's
+          # gitleaks_<VERSION>_checksums.txt, copy the sha256 for the linux_x64 tarball into SHA256
+          # below, and update VERSION. We pin the checksum LITERAL here rather than downloading and
+          # trusting the release's checksums.txt at build time, so a tampered or swapped release
+          # asset cannot pass: the binary must match the hash we reviewed when we bumped. ----
+          VERSION: "8.21.2"
+          SHA256: "5bc41815076e6ed6ef8fbecc9d9b75bcae31f39029ceb55da08086315316e3ba"
+        run: |
+          set -euo pipefail
+          TARBALL="gitleaks_${VERSION}_linux_x64.tar.gz"
+          URL="https://github.com/gitleaks/gitleaks/releases/download/v${VERSION}/${TARBALL}"
+          curl -sSLo "$TARBALL" "$URL"
+          echo "${SHA256}  ${TARBALL}" | sha256sum -c -
+          tar -xzf "$TARBALL" gitleaks
+          sudo install gitleaks /usr/local/bin/gitleaks
+          gitleaks version
+      - name: Scan for secrets (full history)
+        run: gitleaks detect --source . --config .gitleaks.toml --redact --verbose --exit-code 1

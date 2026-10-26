@@ -1,0 +1,12 @@
+# Keeps the SHA-pinned GitHub Actions in .github/workflows/ current. Each update arrives as a pull
+# request and goes through the same CI and review as any other change.
+#
+# Dependabot does not read .template/core/ci/verify.yml (it is not under .github/workflows/), so
+# when a pin here is bumped, bump the same pin there in the same PR. Generated projects get their
+# own copy of this file, which does cover their workflows.
+version: 2
+updates:
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly

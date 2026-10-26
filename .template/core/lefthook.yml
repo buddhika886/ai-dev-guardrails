@@ -1,0 +1,40 @@
+# Lefthook: local git hooks (Layer 3).
+# Fast backstop on the developer's machine before code leaves it. CI (Layer 4) is the authority and
+# re-runs everything on a clean checkout, so these mirror CI but stay fast.
+#
+# Install once per clone:  npx lefthook install
+#
+# The lint glob/command are filled by /bootstrap from the chosen language fragment. Lint runs in
+# check mode (no auto-write) so it is read-only and safe to run in parallel with the other checks.
+
+pre-commit:
+  parallel: true
+  commands:
+    guardrails-fast:
+      # Repo guardrails, fast mode (skips the built-bundle scan). Read-only.
+      run: GUARDRAILS_FAST=1 bash scripts/ci-guardrails.sh
+    gitleaks-staged:
+      # Scan staged changes for secrets if gitleaks is installed; soft-skip otherwise.
+      run: |
+        if command -v gitleaks >/dev/null 2>&1; then
+          gitleaks protect --staged --config .gitleaks.toml --redact --exit-code 1 || {
+            echo "gitleaks: staged changes contain a potential secret. Commit blocked."; exit 1;
+          }
+        else
+          echo "gitleaks not installed locally, skipping staged scan (CI still enforces it)."
+        fi
+    lint:
+      # Per-language lint on staged files only. Filled from the language fragment.
+      glob: "{{LANG_LINT_GLOB}}"
+      run: "{{LANG_LINT_CMD}} {staged_files}"
+
+pre-push:
+  # Ordered: build must run before the full guardrails so the bundle scan has something to scan.
+  piped: true
+  commands:
+    1-typecheck:
+      run: npm run typecheck
+    2-build:
+      run: npm run build
+    3-guardrails-full:
+      run: bash scripts/ci-guardrails.sh

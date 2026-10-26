@@ -1,0 +1,115 @@
+#!/usr/bin/env bash
+# The sparse install (scenario B): no framework, no production, no database, no bundle. Five tokens
+# are legitimately empty here, and an empty value is the dangerous case: an empty regex can turn a
+# check into a no-op. These cases assert that a check turned off by configuration SAYS SO, and that
+# the checks which remain still bite.
+#
+#   usage: tests/sparse-cases.sh <installed-project-dir>
+set -uo pipefail
+
+PROJ="${1:-}"
+[ -n "$PROJ" ] && [ -d "$PROJ" ] || { echo "usage: tests/sparse-cases.sh <installed-project-dir>" >&2; exit 2; }
+ROOT=$(git rev-parse --show-toplevel)
+# shellcheck source=tests/lib/assert.sh
+. "$ROOT/tests/lib/assert.sh"
+cd "$PROJ" || exit 2
+
+echo "── a check disabled by configuration must announce itself, never pass silently"
+out=$(bash scripts/ci-guardrails.sh 2>&1); rc=$?
+if [ "$rc" -ne 0 ]; then t_fail "the sparse install should be green" "$out"; fi
+for want in \
+  "[2] Public-env and client-secret scan: SKIPPED" \
+  "[5] Additive-migration check: SKIPPED" \
+  "[6] Built-bundle secret scan: SKIPPED" \
+  "[7] Schema-truth check: SKIPPED" \
+  "[9] Client denylist: SKIPPED" \
+  "[11] Governance records: SKIPPED"
+do
+  if printf '%s' "$out" | grep -qF "$want"; then
+    t_pass "reported: $want"
+  else
+    t_fail "missing skip report: $want" "$out"
+  fi
+done
+# A skip must never be dressed up as a verified pass.
+# Case-insensitive on purpose: runtime skips were once printed as "✓ skipped (...)" and an
+# uppercase-only match missed them.
+if printf '%s' "$out" | grep -i 'skipped' | grep -qF '✓'; then
+  t_fail "a SKIPPED line was marked with a tick"
+else
+  t_pass "no SKIPPED line is marked as verified"
+fi
+# All eleven checks accounted for, so a reader of the log can audit coverage.
+seen=$(printf '%s' "$out" | grep -cE '^\[([1-9]|1[01])\]')
+if [ "$seen" -eq 11 ]; then
+  t_pass "all eleven checks appear in the output"
+else
+  t_fail "only $seen of 11 checks reported themselves" "$out"
+fi
+# Governance off: none of its files or pointers may appear.
+if [ ! -e docs/governance ] && [ ! -e .github/pull_request_template.md ] && ! grep -q 'docs/governance' CLAUDE.md; then
+  t_pass "governance off installs no governance files or pointers"
+else
+  t_fail "governance leaked into a project that did not select it"
+fi
+
+echo "── the checks that remain active must still bite"
+printf 'k\n' > signing.key; git add -f signing.key
+expect_reject "a tracked .key is still caught" "confidential file(s) tracked"
+printf '\nexport const bad = (t: string) => sql.raw(t)\n' >> src/core/sign.ts
+expect_reject "unsafe SQL is still caught" "non-parameterised SQL"
+printf '\nlocalStorage.setItem("k", "v")\n' >> src/client/index.ts
+expect_reject "browser storage is still caught" "browser storage"
+
+echo "── with no prod patterns configured, the git protections must still hold"
+guard() {
+  local want="$1" label="$2" cmd="$3" payload
+  payload=$(node -e 'process.stdout.write(JSON.stringify({tool_name:"Bash",tool_input:{command:process.argv[1]}}))' "$cmd")
+  guard_decide "$want" "$label" "$payload" "$PATH"
+}
+guard block "force-push still blocked without prod patterns" 'git push --force origin main'
+guard block "reset --hard still blocked"                     'git reset --hard HEAD~1'
+guard block "clean -fd still blocked"                        'git clean -fd'
+guard allow "ordinary work still allowed"                    'npm test'
+
+echo "── with no production yet, consent and secret hygiene must still hold"
+guard ask   "a push still asks"                              'git push origin main'
+guard ask   "a deploy still asks (built-in default)"         'npx vercel deploy --prod'
+guard ask   "publishing the library still asks"              'npm publish'
+guard block "cat .env still blocked"                         'cat .env'
+# SC2016: unexpanded on purpose; SIGNING_KEY is scenario B's configured secret var.
+# shellcheck disable=SC2016
+guard block "echo of the configured secret still blocked"    'echo $SIGNING_KEY'
+# Documented consequence of answering "none yet" at bootstrap: the guard has no prod patterns to
+# match, so prod safety rests entirely on prepare-versus-execute. Asserted so the trade-off stays
+# visible rather than being discovered later.
+guard allow "a prod-shaped command is NOT caught (no patterns configured)" 'psql postgres://u@db.prod.example/x'
+
+
+echo "── nothing of the template survives bootstrap"
+# Asserted here as well as in install.sh, so the install cannot mark its own homework.
+for p in .template tests scripts/template-integrity.sh CONTRIBUTING.md CODE_OF_CONDUCT.md SECURITY.md \
+         .github/CODEOWNERS .github/ISSUE_TEMPLATE .claude/commands/bootstrap.md; do
+  if [ -e "$p" ]; then t_fail "template file survived: $p"; else t_pass "gone: $p"; fi
+done
+if head -1 README.md | grep -qxF "# $(node -p 'require("./package.json").name')"; then
+  t_pass "README.md is the project's own, titled with the project name"
+else
+  t_fail "README.md is not the generated project README" "$(head -3 README.md)"
+fi
+for p in docs/configuring-rules.md docs/five-layers.md docs/openrouter.md scripts/claude-or.sh \
+         .claude/openrouter.settings.json.example .github/dependabot.yml; do
+  if [ -f "$p" ]; then t_pass "shipped on purpose: $p"; else t_fail "missing shipped file: $p"; fi
+done
+if grep -qxF '.claude/openrouter.settings.json' .gitignore && ! grep -qxE 'DEVLOG.md|PROJECT-GUIDE.md' .gitignore; then
+  t_pass ".gitignore keeps the OpenRouter key out and drops the template's own entries"
+else
+  t_fail ".gitignore entries wrong" "$(cat .gitignore)"
+fi
+if grep -qE "^Copyright \(c\) [0-9]{4} Sig Lib authors$" LICENSE && ! grep -q 'Buddhika\|Blott' LICENSE; then
+  t_pass "MIT chosen: LICENSE names the project's holder, not the template's"
+else
+  t_fail "LICENSE holder wrong" "$(head -3 LICENSE)"
+fi
+
+t_summary "SPARSE CASES"
