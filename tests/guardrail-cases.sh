@@ -6,7 +6,10 @@
 set -uo pipefail
 
 PROJ="${1:-}"
-[ -n "$PROJ" ] && [ -d "$PROJ" ] || { echo "usage: tests/guardrail-cases.sh <installed-project-dir>" >&2; exit 2; }
+if [ -z "$PROJ" ] || [ ! -d "$PROJ" ]; then
+  echo "usage: tests/guardrail-cases.sh <installed-project-dir>" >&2
+  exit 2
+fi
 ROOT=$(git rev-parse --show-toplevel)
 # shellcheck source=tests/lib/assert.sh
 . "$ROOT/tests/lib/assert.sh"
