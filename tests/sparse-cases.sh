@@ -101,6 +101,11 @@ for p in docs/configuring-rules.md docs/five-layers.md docs/openrouter.md script
          .claude/openrouter.settings.json.example .github/dependabot.yml; do
   if [ -f "$p" ]; then t_pass "shipped on purpose: $p"; else t_fail "missing shipped file: $p"; fi
 done
+if grep -qF 'One-time GitHub setup' README.md && grep -qF 'Dependabot alerts' README.md; then
+  t_pass "the project README carries the one-time GitHub setup, Dependabot included"
+else
+  t_fail "project README is missing the GitHub setup steps"
+fi
 if grep -qxF '.claude/openrouter.settings.json' .gitignore && ! grep -qxE 'DEVLOG.md|PROJECT-GUIDE.md' .gitignore; then
   t_pass ".gitignore keeps the OpenRouter key out and drops the template's own entries"
 else

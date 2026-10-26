@@ -69,6 +69,10 @@ More detail: [docs/five-layers.md](docs/five-layers.md).
    - It also asks for a project name, your source documents and a licence choice.
 4. Bootstrap installs everything, runs all the checks until they pass, and shows you the result.
 5. **It stops and asks before committing.** Nothing is committed or pushed without your say-so.
+6. **On GitHub? Do the one-time repository setup.** Some protections are repository settings that
+   no file can switch on: Dependabot alerts and security updates, secret scanning with push
+   protection, branch protection for `main`, and a read-only CI token. Your project's new README
+   lists each one under "One-time GitHub setup", with where to click.
 
 ### What you end up with
 

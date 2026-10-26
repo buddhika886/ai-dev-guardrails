@@ -259,6 +259,12 @@ and force-push is disabled.
 GitHub Actions are pinned to exact commit SHAs, and `.github/dependabot.yml` proposes updates as pull
 requests. Review those like any other change.
 
+**Dependabot needs switching on.** The `dependabot.yml` file schedules version updates, but
+**Dependabot alerts** (known vulnerabilities in your dependencies) and **Dependabot security updates**
+(automatic fix pull requests) are repository settings. Enable both in **Settings → Code security**.
+The project README's "One-time GitHub setup" section lists these with the other repository settings
+(secret scanning, branch protection, read-only CI token).
+
 ---
 
 ## 6. Tiers
