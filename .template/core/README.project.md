@@ -17,6 +17,32 @@ the AI's own commands, your machine on commit and push, and CI on every pull req
    a clone without hooks has no local checks at all.
 3. Run the checks: `npm run guardrails`. You should see `GUARDRAILS PASSED.`
 
+### One-time GitHub setup (repository owner)
+
+If this project lives on GitHub, the repository owner switches these on once. They are repository
+settings, so no file in the repo can turn them on for you:
+
+1. **Dependabot.** In **Settings → Code security**, enable **Dependabot alerts** (warnings when a
+   dependency has a known vulnerability) and **Dependabot security updates** (automatic fix pull
+   requests). `.github/dependabot.yml` already schedules weekly update pull requests for GitHub
+   Actions and npm; alerts and security fixes need these two switches.
+2. **Secret scanning.** On the same page, enable **Secret scanning** and **Push protection**, so
+   GitHub also rejects a pushed secret.
+3. **Protect `main`.** In **Settings → Rules → Rulesets**, add a branch ruleset for `main`: require
+   a pull request with at least one approval, require the `verify` and `secrets` checks to pass, and
+   block force pushes.
+4. **Read-only CI token.** In **Settings → Actions → General → Workflow permissions**, choose
+   **Read repository contents**.
+5. **Client denylist** (client work only). In **Settings → Secrets and variables → Actions**, add a
+   secret named `GUARDRAILS_DENYLIST` with the same lines as `.guardrails/denylist.local`.
+
+Prefer the command line? With the GitHub CLI, replace `OWNER/REPO` and run:
+
+```bash
+gh api -X PUT repos/OWNER/REPO/vulnerability-alerts        # Dependabot alerts
+gh api -X PUT repos/OWNER/REPO/automated-security-fixes    # Dependabot security updates
+```
+
 ### What to expect when working with Claude Code
 
 - **It asks before anything leaves your machine:** commits, pushes, pull requests, publishes,

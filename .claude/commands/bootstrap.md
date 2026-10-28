@@ -202,7 +202,11 @@ empty. Prod safety by process still applies.
 7. **STOP and ask for consent to commit.** Show the user exactly what would be committed (the file
    list). Never commit or push without a fresh, explicit go-ahead. This holds even here. Do not run
    `git commit` until they say yes.
-8. **Tell the user about the client denylist.** If the project is for a client, the user should
+8. **Tell the user about the one-time GitHub setup.** If the project is on GitHub, point the user to
+   the "One-time GitHub setup" section of the new `README.md`: Dependabot alerts and security
+   updates, secret scanning with push protection, a ruleset protecting `main`, and a read-only CI
+   token. These are repository settings, so bootstrap cannot switch them on.
+9. **Tell the user about the client denylist.** If the project is for a client, the user should
    create `.guardrails/denylist.local` themselves, one extended regex per line for each identifier
    that must never be committed (the client's legal name, for example), and set the same lines as
    the `GUARDRAILS_DENYLIST` repository secret for CI. Do not ask them to type the names into the
