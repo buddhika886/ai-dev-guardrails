@@ -51,7 +51,8 @@ Three principles run through everything:
 - **If a check is switched off, it says so.** It prints `SKIPPED (reason)`, never a green tick.
 - **Every check is tested both ways.** It must catch its problem and must not block normal work.
 
-More detail: [docs/five-layers.md](docs/five-layers.md).
+More detail: [docs/five-layers.md](docs/five-layers.md). Why each rule exists, in plain language,
+with the real incidents behind them: [docs/why-these-rules.md](docs/why-these-rules.md).
 
 ---
 
@@ -146,7 +147,8 @@ without printing it (`[ -n "$API_SECRET" ] && echo set`), running tests, buildin
 | Dependabot | Falling behind on security fixes | `.github/dependabot.yml`, plus alerts and security updates switched on in GitHub (step 6) |
 
 Checks 1 to 12 live in `scripts/ci-guardrails.sh`; the names in the right-hand column are settings
-at the top of that file unless another file is named.
+at the top of that file unless another file is named. For why each one exists and how it compares
+with common practice, see [docs/why-these-rules.md](docs/why-these-rules.md).
 
 ---
 

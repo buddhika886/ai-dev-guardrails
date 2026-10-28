@@ -384,7 +384,7 @@ if head -1 README.md | grep -qxF "# $(node -p 'require("./package.json").name')"
 else
   t_fail "README.md is not the generated project README" "$(head -3 README.md)"
 fi
-for p in docs/configuring-rules.md docs/five-layers.md docs/openrouter.md scripts/claude-or.sh \
+for p in docs/configuring-rules.md docs/five-layers.md docs/why-these-rules.md docs/openrouter.md scripts/claude-or.sh \
          .claude/openrouter.settings.json.example .github/dependabot.yml; do
   if [ -f "$p" ]; then t_pass "shipped on purpose: $p"; else t_fail "missing shipped file: $p"; fi
 done

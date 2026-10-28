@@ -62,6 +62,7 @@ gh api -X PUT repos/OWNER/REPO/automated-security-fixes    # Dependabot security
 
 - [CLAUDE.md](CLAUDE.md): the rules the AI reads first, and the known limits of each control.
 - [docs/five-layers.md](docs/five-layers.md): how the five layers fit together.
+- [docs/why-these-rules.md](docs/why-these-rules.md): why each rule exists, in plain language.
 - [docs/configuring-rules.md](docs/configuring-rules.md): how to change a rule, one by one.
 {{IF_GOVERNANCE_TIER}}- [docs/governance/](docs/governance/): the evidence log, decision record and phase briefs.
 

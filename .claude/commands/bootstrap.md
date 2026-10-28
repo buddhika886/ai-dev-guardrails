@@ -84,7 +84,7 @@ Do these in order. Show the user what you are doing at each step.
    - in `.gitignore`, the template-only entries `DEVLOG.md` and `PROJECT-GUIDE.md` and the comment
      lines directly above each
    `LICENSE` is handled in Step 5. Keep `docs/five-layers.md`, `docs/configuring-rules.md`,
-   `docs/openrouter.md`, `scripts/claude-or.sh` and `.claude/openrouter.settings.json.example`:
+   `docs/why-these-rules.md`, `docs/openrouter.md`, `scripts/claude-or.sh` and `.claude/openrouter.settings.json.example`:
    they are project documentation and an optional developer tool, shipped on purpose.
 1. **Copy core.** Copy every file from `.template/core/` to its destination:
    - `.template/core/CLAUDE.project.md` → hold for Step 5 (do not place yet).
