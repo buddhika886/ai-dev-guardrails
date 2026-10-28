@@ -38,3 +38,14 @@ pre-push:
       run: npm run build
     3-guardrails-full:
       run: bash scripts/ci-guardrails.sh
+    4-dependency-scan:
+      # Known vulnerabilities in package-lock.json, if OSV-Scanner is installed; soft-skip otherwise
+      # (CI's dependencies job still enforces it).
+      run: |
+        if ! command -v osv-scanner >/dev/null 2>&1; then
+          echo "osv-scanner not installed locally, skipping the dependency scan (CI still enforces it)."
+        elif node -e 'process.exit(Object.keys(require("./package-lock.json").packages || {}).length > 1 ? 0 : 1)' 2>/dev/null; then
+          osv-scanner scan source --lockfile package-lock.json
+        else
+          echo "No dependencies to scan yet (check [12] has already confirmed the lockfile exists)."
+        fi

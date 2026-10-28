@@ -42,12 +42,12 @@ if grep -i 'skipped' <<<"$out" | grep -qF '✓'; then
 else
   t_pass "no SKIPPED line is marked as verified"
 fi
-# All eleven checks accounted for, so a reader of the log can audit coverage.
-seen=$(grep -cE '^\[([1-9]|1[01])\]' <<<"$out")
-if [ "$seen" -eq 11 ]; then
-  t_pass "all eleven checks appear in the output"
+# All twelve checks accounted for, so a reader of the log can audit coverage.
+seen=$(grep -cE '^\[([1-9]|1[012])\]' <<<"$out")
+if [ "$seen" -eq 12 ]; then
+  t_pass "all twelve checks appear in the output"
 else
-  t_fail "only $seen of 11 checks reported themselves" "$out"
+  t_fail "only $seen of 12 checks reported themselves" "$out"
 fi
 # Governance off: none of its files or pointers may appear.
 if [ ! -e docs/governance ] && [ ! -e .github/pull_request_template.md ] && ! grep -q 'docs/governance' CLAUDE.md; then
@@ -63,6 +63,10 @@ printf '\nexport const bad = (t: string) => sql.raw(t)\n' >> src/core/sign.ts
 expect_reject "unsafe SQL is still caught" "non-parameterised SQL"
 printf '\nlocalStorage.setItem("k", "v")\n' >> src/client/index.ts
 expect_reject "browser storage is still caught" "browser storage"
+portable_sed 's/^min-release-age=.*/min-release-age=0/' .npmrc
+expect_reject "the dependency cooldown is still enforced" ".npmrc: min-release-age is"
+rm -f package.json
+expect_accept "with no package.json, the dependency check announces itself" "[12] Dependency policy: SKIPPED (no package.json)"
 
 echo "── with no prod patterns configured, the git protections must still hold"
 guard() {
@@ -78,6 +82,8 @@ guard allow "ordinary work still allowed"                    'npm test'
 echo "── with no production yet, consent and secret hygiene must still hold"
 guard ask   "a push still asks"                              'git push origin main'
 guard ask   "a deploy still asks (built-in default)"         'npx vercel deploy --prod'
+guard ask   "adding a package still asks"                    'npm install left-pad'
+guard block "bypassing the cooldown is still blocked"        'npm install left-pad --min-release-age=0'
 guard ask   "publishing the library still asks"              'npm publish'
 guard block "cat .env still blocked"                         'cat .env'
 # SC2016: unexpanded on purpose; SIGNING_KEY is scenario B's configured secret var.
@@ -100,7 +106,7 @@ if head -1 README.md | grep -qxF "# $(node -p 'require("./package.json").name')"
 else
   t_fail "README.md is not the generated project README" "$(head -3 README.md)"
 fi
-for p in docs/configuring-rules.md docs/five-layers.md docs/openrouter.md scripts/claude-or.sh \
+for p in docs/configuring-rules.md docs/five-layers.md docs/why-these-rules.md docs/openrouter.md scripts/claude-or.sh \
          .claude/openrouter.settings.json.example .github/dependabot.yml; do
   if [ -f "$p" ]; then t_pass "shipped on purpose: $p"; else t_fail "missing shipped file: $p"; fi
 done

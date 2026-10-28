@@ -1,14 +1,21 @@
 # Keeps the SHA-pinned GitHub Actions and the npm dependencies current. Each update arrives as a pull
 # request and goes through the same CI, guardrails and review as any other change: an update is a
 # change like any other, never merged unreviewed.
+#
+# The cooldown matches min-release-age in .npmrc: Dependabot does not propose a version npm would
+# then refuse to install. It applies to version updates only; security updates arrive at once.
 version: 2
 updates:
   - package-ecosystem: github-actions
     directory: /
     schedule:
       interval: weekly
+    cooldown:
+      default-days: 7
   - package-ecosystem: npm
     directory: /
     schedule:
       interval: weekly
     open-pull-requests-limit: 5
+    cooldown:
+      default-days: 7

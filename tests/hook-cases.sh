@@ -131,6 +131,42 @@ guard allow "printenv of a non-secret var"        'printenv NODE_ENV'
 guard allow "an SSH public key"                   'cat ~/.ssh/id_ed25519.pub'
 guard allow "jq field named key"                  'jq .key package.json'
 
+echo "── adding a dependency must ASK; installing the lockfile must not"
+guard ask   "npm install of a named package"              'npm install left-pad'
+guard ask   "npm i with a flag before the name"           'npm i -D typescript'
+guard ask   "a scoped package with a long flag"           'npm install --save-dev @types/node'
+guard ask   "npm add"                                     'npm add zod'
+guard ask   "a global install"                            'npm install -g some-cli'
+guard ask   "an install hidden after cd &&"               'cd web && npm install react'
+guard ask   "pnpm add"                                    'pnpm add zod'
+guard ask   "yarn add"                                    'yarn add zod'
+guard ask   "bun add"                                     'bun add zod'
+guard ask   "pnpm dlx (does not read .npmrc)"             'pnpm dlx create-vite my-app'
+guard ask   "bunx"                                        'bunx cowsay hi'
+guard ask   "approving an install script"                 'npm approve-scripts esbuild'
+guard allow "npm install from the lockfile"               'npm install'
+guard allow "npm ci"                                      'npm ci'
+guard allow "npm install with flags only"                 'npm install --ignore-scripts'
+guard allow "install then test"                           'npm install && npm test'
+guard allow "npx of a local tool (obeys .npmrc)"          'npx tsc --noEmit'
+guard allow "npm view"                                    'npm view react version'
+guard allow "pnpm install from the lockfile"              'pnpm install --frozen-lockfile'
+
+echo "── switching off the dependency policy must be BLOCKED"
+guard block "a cooldown override on the command line"     'npm install left-pad --min-release-age=0'
+guard block "running every install script"               'npm ci --dangerously-allow-all-scripts'
+guard block "relaxing the install-script policy"          'npm install --no-strict-allow-scripts'
+guard block "allowing git dependencies"                   'npm install --allow-git=all'
+guard block "a registry override"                         'npm install zod --registry=https://npm.acmecorp.net/'
+guard block "a before date that overrides the cooldown"   'npx --before=2099-01-01 create-thing'
+guard block "npm config set on a policy key"              'npm config set min-release-age 0'
+guard block "npm config delete on a policy key"           'npm config delete allow-git'
+guard block "npm config edit"                             'npm config edit'
+guard block "an environment-variable override"           'npm_config_min_release_age=0 npm install left-pad'
+guard block "an upper-case environment override"          'NPM_CONFIG_REGISTRY=https://npm.acmecorp.net/ npm ci'
+guard allow "git log --before is not npm"                 'git log --before=2026-01-01 --oneline'
+guard allow "npm config get is read-only"                 'npm config get min-release-age'
+
 echo "── the ask decision must be well-formed"
 payload=$(node -e 'process.stdout.write(JSON.stringify({tool_name:"Bash",tool_input:{command:"git push origin main"}}))')
 out=$(printf '%s' "$payload" | bash scripts/claude-bash-guard.sh 2>/dev/null)

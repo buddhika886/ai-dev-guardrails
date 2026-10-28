@@ -57,14 +57,26 @@ npx supabase db push
 npx prisma migrate deploy
 npx drizzle-kit push
 gh secret set API_KEY
+npm install left-pad
+pnpm add left-pad
 cat .env
 printenv'
 # Consent rules that .claude/settings.json must keep. Ask rules are evaluated before allow rules, so
 # these hold even when an allowlist wildcard matches the same command.
 REQUIRED_ASK_RULES='Bash(git commit *)
-Bash(git push *)'
+Bash(git push *)
+Edit(.npmrc)
+Write(.npmrc)'
 # Where the governance tier's records live, when it is installed.
 GOVERNANCE_DIR='docs/governance'
+# Dependency policy (check 12). A release must be at least this many days old before npm installs
+# it: hijacked releases are usually caught and pulled within days, and a package name an assistant
+# invented is almost always brand new. npm ignores min-release-age before 11.10.0, so an older npm
+# fails the check rather than quietly skipping the cooldown. Lockfile entries must resolve to one of
+# the registries below (space-separated, each ending in /); add a private registry here if you use one.
+MIN_RELEASE_AGE_DAYS=7
+NPM_MIN_VERSION='11.10.0'
+ALLOWED_REGISTRIES='https://registry.npmjs.org/'
 # --------------------------------------
 
 fails=0; fail(){ echo "  ✗ $1"; fails=$((fails+1)); }; ok(){ echo "  ✓ $1"; }
@@ -360,6 +372,96 @@ case "$GOVERNANCE_ENABLED" in
     fail "GOVERNANCE_ENABLED must be 'on' or 'off', got '$GOVERNANCE_ENABLED' (failing closed)"
     ;;
 esac
+
+if [ ! -f package.json ]; then
+  skipped "[12] Dependency policy" "no package.json"
+else
+  echo "[12] Dependency policy (.npmrc, package-lock.json, npm version)"
+  if ! command -v node >/dev/null 2>&1; then
+    fail "node is not on PATH, so the dependency policy cannot be checked (failing closed)"
+  else
+    # SC2016: the single-quoted block is JavaScript; its $ characters are template-literal syntax.
+    # shellcheck disable=SC2016
+    if dep=$(MIN_AGE="$MIN_RELEASE_AGE_DAYS" REGISTRIES="$ALLOWED_REGISTRIES" node -e '
+      const fs = require("fs")
+      const minAge = Number(process.env.MIN_AGE)
+      const slash = (u) => (u.endsWith("/") ? u : u + "/")
+      const registries = process.env.REGISTRIES.split(/\s+/).filter(Boolean).map(slash)
+      const errs = [], oks = []
+
+      // .npmrc: key=value lines, comments start with # or ;, and the last occurrence of a key wins.
+      if (!fs.existsSync(".npmrc")) {
+        errs.push(".npmrc is missing: the release cooldown and install-script policy are not set")
+      } else {
+        const rc = {}
+        for (const raw of fs.readFileSync(".npmrc", "utf8").split(/\r?\n/)) {
+          const line = raw.trim()
+          if (!line || line.startsWith("#") || line.startsWith(";")) continue
+          const i = line.indexOf("=")
+          if (i < 0) continue
+          rc[line.slice(0, i).trim()] = line.slice(i + 1).trim().replace(/^["\x27](.*)["\x27]$/, "$1")
+        }
+        const before = errs.length
+        const age = rc["min-release-age"]
+        if (age === undefined) errs.push(`.npmrc: min-release-age is not set (need at least ${minAge})`)
+        else if (!/^\d+$/.test(age) || Number(age) < minAge) errs.push(`.npmrc: min-release-age is "${age}" (need a whole number of days, at least ${minAge})`)
+        if (rc.before !== undefined) errs.push(".npmrc: before is set, and it overrides min-release-age")
+        for (const k of ["allow-git", "allow-remote"]) {
+          if (rc[k] !== "none") errs.push(`.npmrc: ${k} is "${rc[k] ?? "unset"}" (must be none: dependencies come from the registry only)`)
+        }
+        if (rc["strict-allow-scripts"] !== "true") errs.push(".npmrc: strict-allow-scripts must be true (an unreviewed install script fails the install)")
+        if (rc["dangerously-allow-all-scripts"] === "true") errs.push(".npmrc: dangerously-allow-all-scripts is true (every install script would run)")
+        for (const [k, v] of Object.entries(rc)) {
+          if ((k === "registry" || /^@[^:]+:registry$/.test(k)) && !registries.includes(slash(v))) {
+            errs.push(`.npmrc: ${k} points at ${v}, which is not in ALLOWED_REGISTRIES`)
+          }
+        }
+        if (errs.length === before) oks.push(`.npmrc keeps the policy: ${age}-day release cooldown, registry-only dependencies, reviewed install scripts`)
+      }
+
+      // package-lock.json: every installed package from an allowed registry, with a sha512 hash, at
+      // a URL that names the same package (a lockfile pointing one name at another tarball is the
+      // classic tampering trick).
+      if (!fs.existsSync("package-lock.json")) {
+        errs.push("package-lock.json is missing: run npm install --package-lock-only and commit it")
+      } else {
+        const lock = JSON.parse(fs.readFileSync("package-lock.json", "utf8"))
+        if (!lock.packages || Number(lock.lockfileVersion) < 2) {
+          errs.push("package-lock.json uses lockfile version 1, which this check cannot verify: regenerate it with a current npm")
+        } else {
+          const before = errs.length
+          let n = 0
+          for (const [path, e] of Object.entries(lock.packages)) {
+            if (path === "" || e.link || e.inBundle) continue
+            n++
+            const name = e.name || path.slice(path.lastIndexOf("node_modules/") + "node_modules/".length)
+            const url = e.resolved || ""
+            const reg = registries.find((r) => url.startsWith(r))
+            if (!reg) errs.push(`package-lock.json: ${path} resolves to "${url || "nowhere"}", not an allowed registry`)
+            else if (!url.startsWith(reg + name + "/-/")) errs.push(`package-lock.json: ${path} resolves to a tarball for a different package (${url})`)
+            if (!String(e.integrity || "").startsWith("sha512-")) errs.push(`package-lock.json: ${path} has no sha512 integrity hash`)
+          }
+          if (errs.length === before) oks.push(`package-lock.json: ${n} package(s), all from an allowed registry with sha512 integrity`)
+        }
+      }
+      process.stdout.write([...oks.map((l) => "OK " + l), ...errs.map((l) => "ERR " + l)].join("\n"))
+    ' 2>&1); then
+      while IFS= read -r line; do
+        case "$line" in "OK "*) ok "${line#OK }" ;; "ERR "*) fail "${line#ERR }" ;; esac
+      done <<< "$dep"
+    else
+      fail "could not read .npmrc or package-lock.json (failing closed):"; echo "$dep" | sed 's/^/      /'
+    fi
+    # The cooldown only exists if this npm understands it; older versions ignore the key silently.
+    if ! npm_v=$(npm --version 2>/dev/null) || [ -z "$npm_v" ]; then
+      fail "npm is not on PATH, so its version cannot be checked (failing closed)"
+    elif node -e 'const p=(v)=>v.split(".").map(Number); const [a,b]=[p(process.argv[1]),p(process.argv[2])]; for (let i=0;i<3;i++){ if((a[i]||0)!==(b[i]||0)) process.exit((a[i]||0)>(b[i]||0)?0:1) } process.exit(0)' "$npm_v" "$NPM_MIN_VERSION"; then
+      ok "npm $npm_v enforces the cooldown (needs $NPM_MIN_VERSION or later)"
+    else
+      fail "npm $npm_v ignores min-release-age, so the cooldown is not enforced: upgrade to npm $NPM_MIN_VERSION or later (Node 24 ships it)"
+    fi
+  fi
+fi
 
 echo
 if [ "$fails" -ne 0 ]; then echo "GUARDRAILS FAILED: $fails issue(s)."; exit 1; fi

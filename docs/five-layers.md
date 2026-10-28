@@ -20,10 +20,12 @@ running the same command via the input-box `!` prefix is unaffected):
 - **PreToolUse on Bash** (`claude-bash-guard.sh`) answers every agent command with one of three
   outcomes before it runs:
   - **Block** (exit 2, reason shown to the model): anything that targets production from local,
-    rewrites shared git history, or would print a secret into the session transcript (reading
-    `.env*` or key files, bare `env`, echoing secret-named variables, secret-manager CLIs).
+    rewrites shared git history, would print a secret into the session transcript (reading
+    `.env*` or key files, bare `env`, echoing secret-named variables, secret-manager CLIs), or
+    overrides the dependency policy in `.npmrc` for one command.
   - **Ask** (a PreToolUse `permissionDecision: "ask"`): commits, pushes, pull requests, releases,
-    package publishes, deploys, remote migrations and remote secret or config changes. The user is
+    package publishes, deploys, remote migrations, remote secret or config changes, and adding a
+    package (a name an assistant suggests may not be the package anyone meant). The user is
     prompted every time, including in auto mode. Deploy verbs are on by default, even before a
     project has production: a question is cheaper than an unintended deploy.
   - **Allow**: everything else carries on through the normal permission flow.
@@ -50,16 +52,21 @@ for the rest.
 
 Lefthook runs fast checks on the developer's machine before code leaves it: guardrails in fast mode,
 a staged-secret scan (gitleaks, soft-skipped if not installed since CI always enforces it), and
-per-language lint on pre-commit; typecheck, full guardrails, and build on pre-push. This is early
+per-language lint on pre-commit; typecheck, full guardrails, build and (if OSV-Scanner is
+installed) a dependency vulnerability scan on pre-push. This is early
 warning, not authority. The guardrails include a client denylist read from a gitignored file
 (a committed denylist would leak the names it protects), and a check that fails while the hooks
-themselves are not installed, since `core.hooksPath` and `.git/hooks` do not survive a clone.
+themselves are not installed, since `core.hooksPath` and `.git/hooks` do not survive a clone, and
+a dependency-policy check: `.npmrc` keeps its 7-day release cooldown and registry-only rules, and
+every lockfile entry comes from the registry with a sha512 hash.
 
 ## 4. CI
 
 GitHub Actions is the authority. It re-runs everything on a clean checkout, so nothing merges on a
-"works on my machine". Two jobs: `verify` (typecheck, lint, build, guardrails, schema-truth) and
-`secrets` (a checksum-pinned gitleaks binary scanning full history). The token is least-privilege
+"works on my machine". Three jobs: `verify` (typecheck, lint, build, registry signatures,
+guardrails, schema-truth), `dependencies` (a checksum-pinned OSV-Scanner binary checking the
+lockfile for known vulnerabilities) and `secrets` (a checksum-pinned gitleaks binary scanning full
+history). The token is least-privilege
 (`contents: read`). Branch protection on `main` requires these checks and a review, and disallows
 force-push.
 

@@ -25,6 +25,7 @@ what makes it useful, and what makes it risky. These are the problems this kit i
 | Accidental deploys | The AI runs a deploy while "just testing", and it goes to the live site. |
 | Secrets committed to git | An API key gets committed. Deleting it later doesn't help: it stays in the history. |
 | Confidential names in code | A client's real name ends up in a comment or commit message. |
+| Risky packages | The AI installs a package with a known vulnerability, a hijacked new release, or a plausible name that doesn't exist and that an attacker has registered. |
 | "Done" that isn't | Work is reported finished, but nobody actually ran the tests. |
 
 ---
@@ -50,13 +51,14 @@ Three principles run through everything:
 - **If a check is switched off, it says so.** It prints `SKIPPED (reason)`, never a green tick.
 - **Every check is tested both ways.** It must catch its problem and must not block normal work.
 
-More detail: [docs/five-layers.md](docs/five-layers.md).
+More detail: [docs/five-layers.md](docs/five-layers.md). Why each rule exists, in plain language,
+with the real incidents behind them: [docs/why-these-rules.md](docs/why-these-rules.md).
 
 ---
 
 ## Try it
 
-**You need:** [Claude Code](https://claude.com/claude-code), git, and Node 20.
+**You need:** [Claude Code](https://claude.com/claude-code), git, and Node 24.
 
 1. On GitHub, choose **Use this template** to make your own copy, then clone it.
 2. Open the folder in Claude Code and type `/bootstrap`.
@@ -84,6 +86,7 @@ More detail: [docs/five-layers.md](docs/five-layers.md).
 | `scripts/claude-bash-guard.sh` | The command guard |
 | `scripts/ci-guardrails.sh` | The guardrail checks |
 | `.gitleaks.toml` | The secret scanner's rules |
+| `.npmrc` | The dependency policy: a 7-day wait on new releases, registry-only packages, approved install scripts |
 | `lefthook.yml` | Checks that run on your machine on commit and push |
 | `.github/workflows/ci.yml` | Checks that run on GitHub for every pull request |
 | `docs/` | How it all works and how to change it |
@@ -97,7 +100,8 @@ is removed, so your project contains only what it needs.
 
 **The AI asks before anything leaves your machine.** You get a prompt, every single time, for:
 commits, pushes, pull requests, publishing a package, deploys, changes to a live database, and
-changes to secrets or settings on a hosting platform. This holds even if someone clicked "don't ask
+changes to secrets or settings on a hosting platform. It also asks before adding a package, so you
+see the exact name before anything is installed. This holds even if someone clicked "don't ask
 again" earlier, and even in auto mode. Deploys ask by default, even before you have a live site: a
 question costs a second, an accidental deploy costs much more.
 
@@ -106,6 +110,7 @@ question costs a second, an accidental deploy costs much more.
 - touching production from your laptop (you describe production during setup)
 - rewriting shared git history (force-push, `git reset --hard`)
 - printing secrets into the chat (`cat .env`, `printenv`, `echo $API_SECRET`)
+- switching off the dependency policy for one command (`npm install --min-release-age=0`)
 
 Why block secrets instead of asking? If you approved the prompt, the secret would land in the chat
 history anyway, and once it's there it can only be changed, never removed.
@@ -135,10 +140,15 @@ without printing it (`[ -n "$API_SECRET" ] && echo set`), running tests, buildin
 | 9. No client names | Confidential names in code or commits | `.guardrails/denylist.local` |
 | 10. Local checks installed | A fresh clone with no local checks | Built in |
 | 11. Honest records (governance) | "Done" with no proof attached | `docs/governance/` |
+| 12. Dependency policy holds | Brand-new releases, git or URL packages, unapproved install scripts, a tampered lockfile | `.npmrc`, `package-lock.json` |
+| Ask before adding a package | Made-up or misspelt package names | Command guard |
 | Secret scanner | API keys, tokens, passwords in commits | `.gitleaks.toml` |
+| Dependency scanner | Packages with known vulnerabilities | CI (OSV-Scanner), optional on push |
+| Dependabot | Falling behind on security fixes | `.github/dependabot.yml`, plus alerts and security updates switched on in GitHub (step 6) |
 
-Checks 1 to 11 live in `scripts/ci-guardrails.sh`; the names in the right-hand column are settings
-at the top of that file unless another file is named.
+Checks 1 to 12 live in `scripts/ci-guardrails.sh`; the names in the right-hand column are settings
+at the top of that file unless another file is named. For why each one exists and how it compares
+with common practice, see [docs/why-these-rules.md](docs/why-these-rules.md).
 
 ---
 
@@ -192,6 +202,12 @@ setup and you also get:
 
 Check 11 keeps it honest: a phase can't be marked Done without proof attached.
 
+### Extra dependency scanners
+
+If your team already pays for Snyk, Socket, GitHub Code Security or similar, or is happy to run
+OWASP Dependency-Check, each can be added as an extra CI step alongside the free defaults. See
+"If you already have an account" in [docs/configuring-rules.md](docs/configuring-rules.md).
+
 ### Running Claude Code through OpenRouter
 
 Each developer can choose to run Claude Code through OpenRouter instead of a Claude subscription,
@@ -213,6 +229,10 @@ No safety system is complete. The gaps:
 - **It only watches the AI.** Commands you type in your own terminal aren't checked.
 - **A leaked secret can't be un-leaked.** If one reaches the chat history, change it.
 - **Check 11 checks structure, not quality.** A reviewer still decides whether the proof proves it.
+- **Dependency protection is set up for npm.** pnpm, yarn and bun have equivalent settings (see
+  [docs/configuring-rules.md](docs/configuring-rules.md)), but check 12 doesn't read them. And a
+  vulnerability scanner only knows what has been reported: the 7-day wait is what protects you from
+  a malicious release nobody has spotted yet.
 
 ---
 

@@ -151,6 +151,10 @@ local_allow '["Bash(npm test)", "Bash(npx biome check *)", "Bash(git status *)",
 expect_accept "ordinary local allows are accepted" "no allow rule pre-approves a consent command"; clean_local
 mkdir -p .claude; printf '{not json\n' > .claude/settings.local.json
 expect_reject "an unparseable local settings file fails closed" "could not parse the settings files"; clean_local
+portable_sed '/"Edit(.npmrc)",/d' .claude/settings.json
+expect_reject "removing the ask rule for editing .npmrc is caught" "consent rule removed from .claude/settings.json: Edit(.npmrc)"
+local_allow '["Bash(npm install *)"]'
+expect_reject "a local allow that pre-approves adding packages is caught" "permission creep"; clean_local
 
 echo "── [9] client denylist: blocks, and never prints the name it protects"
 mkdir -p .guardrails
@@ -281,6 +285,94 @@ else
 fi
 
 
+echo "── [12] dependency policy: .npmrc, package-lock.json and npm version"
+# Lockfile fixtures are built here, never committed whole: a package entry is name, version,
+# resolved URL and integrity, and each case changes one of them. The hash is a placeholder of the
+# right shape; check [12] verifies the algorithm, not the bytes (npm itself does that on install).
+REG=https://registry.npmjs.org
+SHA="sha512-$(printf 'A%.0s' $(seq 1 86))=="
+# lockfile <json of the packages object, without the root entry>
+lockfile() {
+  PKGS="$1" node -e '
+    const fs = require("fs"), pkg = JSON.parse(fs.readFileSync("package.json", "utf8"))
+    const packages = Object.assign({ "": { name: pkg.name, version: pkg.version } }, JSON.parse(process.env.PKGS))
+    fs.writeFileSync("package-lock.json", JSON.stringify({ name: pkg.name, version: pkg.version, lockfileVersion: 3, requires: true, packages }, null, 2) + "\n")'
+}
+entry() { printf '"node_modules/%s":{"version":"%s","resolved":"%s","integrity":"%s"}' "$1" "$2" "$3" "$4"; }
+good_is_number=$(entry is-number 7.0.0 "$REG/is-number/-/is-number-7.0.0.tgz" "$SHA")
+good_types=$(entry @types/node 24.0.0 "$REG/@types/node/-/node-24.0.0.tgz" "$SHA")
+
+expect_accept "the installed .npmrc and lockfile pass" ".npmrc keeps the policy: 7-day release cooldown"
+lockfile "{$good_is_number,$good_types}"
+expect_accept "registry packages with sha512 hashes are accepted, scoped ones included" "2 package(s), all from an allowed registry"
+lockfile "{$(entry is-number 7.0.0 'git+ssh://git@github.com/acme/is-number.git#4f2c' "$SHA")}"
+expect_reject "a git dependency in the lockfile is caught" "not an allowed registry"
+lockfile "{$(entry is-number 7.0.0 'https://cdn.acmecorp.net/is-number-7.0.0.tgz' "$SHA")}"
+expect_reject "a tarball from another host is caught" "not an allowed registry"
+lockfile "{$(entry is-number 7.0.0 'http://registry.npmjs.org/is-number/-/is-number-7.0.0.tgz' "$SHA")}"
+expect_reject "the registry over plain http is caught" "not an allowed registry"
+lockfile "{$(entry is-number 7.0.0 "$REG/is-numbr/-/is-numbr-7.0.0.tgz" "$SHA")}"
+expect_reject "a name pointed at another package's tarball is caught" "tarball for a different package"
+lockfile "{$(entry is-number 7.0.0 "$REG/is-number/-/is-number-7.0.0.tgz" '')}"
+expect_reject "a package with no integrity hash is caught" "has no sha512 integrity hash"
+lockfile "{$(entry is-number 7.0.0 "$REG/is-number/-/is-number-7.0.0.tgz" 'sha1-AAAAAAAAAAAAAAAAAAAAAAAAAAA=')}"
+expect_reject "a weak sha1 hash is caught" "has no sha512 integrity hash"
+printf '{"name":"x","version":"1.0.0","lockfileVersion":1,"dependencies":{}}\n' > package-lock.json
+expect_reject "a version 1 lockfile cannot dodge the check" "lockfile version 1"
+rm -f package-lock.json
+expect_reject "a missing lockfile is caught" "package-lock.json is missing"
+printf '{not json\n' > package-lock.json
+expect_reject "an unparseable lockfile fails closed" "could not read .npmrc or package-lock.json"
+
+rm -f .npmrc
+expect_reject "a missing .npmrc is caught" ".npmrc is missing"
+for bad in 'min-release-age=0' 'min-release-age=3' 'min-release-age=seven'; do
+  portable_sed "s/^min-release-age=.*/$bad/" .npmrc
+  expect_reject "a weakened cooldown ($bad) is caught" ".npmrc: min-release-age is"
+done
+portable_sed '/^min-release-age=/d' .npmrc
+expect_reject "a removed cooldown is caught" "min-release-age is not set"
+printf '\nmin-release-age=0\n' >> .npmrc
+expect_reject "a later line overriding the cooldown is caught (the last one wins)" ".npmrc: min-release-age is \"0\""
+portable_sed 's/^min-release-age=.*/min-release-age=14/' .npmrc
+expect_accept "a longer cooldown is accepted" "14-day release cooldown"
+printf '\nbefore=2099-01-01\n' >> .npmrc
+expect_reject "a 'before' date that overrides the cooldown is caught" "before is set"
+portable_sed 's/^allow-git=.*/allow-git=all/' .npmrc
+expect_reject "allowing git dependencies is caught" ".npmrc: allow-git is \"all\""
+portable_sed '/^allow-remote=/d' .npmrc
+expect_reject "removing the URL-dependency rule is caught" ".npmrc: allow-remote is \"unset\""
+portable_sed 's/^strict-allow-scripts=.*/strict-allow-scripts=false/' .npmrc
+expect_reject "relaxing the install-script policy is caught" "strict-allow-scripts must be true"
+printf '\ndangerously-allow-all-scripts=true\n' >> .npmrc
+expect_reject "running every install script is caught" "dangerously-allow-all-scripts is true"
+printf '\nregistry=https://npm.acmecorp.net/\n' >> .npmrc
+expect_reject "an unlisted registry is caught" "not in ALLOWED_REGISTRIES"
+printf '\n@acme:registry=https://npm.acmecorp.net/\n' >> .npmrc
+expect_reject "an unlisted scoped registry is caught" "@acme:registry points at"
+portable_sed "s|^ALLOWED_REGISTRIES=.*|ALLOWED_REGISTRIES='https://registry.npmjs.org/ https://npm.acmecorp.net/'|" scripts/ci-guardrails.sh
+printf '\n@acme:registry=https://npm.acmecorp.net\n' >> .npmrc
+lockfile "{$(entry @acme/ui 1.0.0 'https://npm.acmecorp.net/@acme/ui/-/ui-1.0.0.tgz' "$SHA")}"
+expect_accept "a registry added to ALLOWED_REGISTRIES is accepted" "1 package(s), all from an allowed registry"
+
+SHIM=$(mktemp -d)
+printf '#!/bin/sh\necho 10.9.2\n' > "$SHIM/npm"; chmod +x "$SHIM/npm"
+out=$(PATH="$SHIM:$PATH" GUARDRAILS_BASE=base bash scripts/ci-guardrails.sh 2>&1); rc=$?
+if [ "$rc" -ne 0 ] && grep -qF "npm 10.9.2 ignores min-release-age" <<<"$out"; then
+  t_pass "an npm too old to enforce the cooldown is caught"
+else
+  t_fail "old npm (rc=$rc)" "$out"
+fi
+printf '#!/bin/sh\nexit 1\n' > "$SHIM/npm"
+out=$(PATH="$SHIM:$PATH" GUARDRAILS_BASE=base bash scripts/ci-guardrails.sh 2>&1); rc=$?
+if [ "$rc" -ne 0 ] && grep -qF "npm is not on PATH, so its version cannot be checked (failing closed)" <<<"$out"; then
+  t_pass "a broken npm fails closed"
+else
+  t_fail "broken npm (rc=$rc)" "$out"
+fi
+rm -rf "$SHIM"
+reset_project
+
 echo "── nothing of the template survives bootstrap"
 # Asserted here as well as in install.sh, so the install cannot mark its own homework.
 for p in .template tests scripts/template-integrity.sh CONTRIBUTING.md CODE_OF_CONDUCT.md SECURITY.md \
@@ -292,7 +384,7 @@ if head -1 README.md | grep -qxF "# $(node -p 'require("./package.json").name')"
 else
   t_fail "README.md is not the generated project README" "$(head -3 README.md)"
 fi
-for p in docs/configuring-rules.md docs/five-layers.md docs/openrouter.md scripts/claude-or.sh \
+for p in docs/configuring-rules.md docs/five-layers.md docs/why-these-rules.md docs/openrouter.md scripts/claude-or.sh \
          .claude/openrouter.settings.json.example .github/dependabot.yml; do
   if [ -f "$p" ]; then t_pass "shipped on purpose: $p"; else t_fail "missing shipped file: $p"; fi
 done
@@ -305,6 +397,19 @@ if grep -qxF '.claude/openrouter.settings.json' .gitignore && ! grep -qxE 'DEVLO
   t_pass ".gitignore keeps the OpenRouter key out and drops the template's own entries"
 else
   t_fail ".gitignore entries wrong" "$(cat .gitignore)"
+fi
+CI=.github/workflows/ci.yml
+if grep -qE '^  dependencies:' "$CI" && grep -qE 'SHA256: "[0-9a-f]{64}"' <(sed -n '/^  dependencies:/,/^  secrets:/p' "$CI") \
+   && grep -qF 'osv-scanner scan source --lockfile package-lock.json' "$CI" && grep -qF 'npm audit signatures' "$CI"; then
+  t_pass "CI scans dependencies with a checksum-pinned OSV-Scanner and checks registry signatures"
+else
+  t_fail "CI is missing the dependency scan or the signature check" "$(cat "$CI")"
+fi
+if [ "$(cut -d. -f1 .nvmrc)" -ge 24 ] 2>/dev/null && grep -qE '^  - package-ecosystem: npm' .github/dependabot.yml \
+   && [ "$(grep -c 'default-days: 7' .github/dependabot.yml)" -eq 2 ]; then
+  t_pass "Node 24+ (npm with the cooldown) is pinned, and Dependabot waits the same 7 days"
+else
+  t_fail "Node pin or Dependabot cooldown wrong" "$(cat .nvmrc .github/dependabot.yml)"
 fi
 if [ ! -e LICENSE ]; then
   t_pass "no licence chosen: LICENSE removed (all rights reserved)"

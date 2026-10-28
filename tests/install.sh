@@ -79,6 +79,7 @@ ensure_ignored '.claude/openrouter.settings.json'
 # ---- bootstrap Step 4.2: copy the TypeScript fragment ----
 cp "$T/lang/ts/biome.json"             biome.json
 cp "$T/lang/ts/.nvmrc"                 .nvmrc
+cp "$T/lang/ts/.npmrc"                 .npmrc
 cp "$T/lang/ts/eslint-escape-hatch.md" docs/eslint-escape-hatch.md
 cp "$T/lang/ts/tsconfig-note.md"       docs/tsconfig-note.md
 node -e '
@@ -87,6 +88,8 @@ const frag = JSON.parse(fs.readFileSync(process.argv[1], "utf8"))
 const name = process.argv[2]
 fs.writeFileSync("package.json", JSON.stringify({ name, private: true, version: "0.1.0", scripts: frag.scripts }, null, 2) + "\n")
 ' "$T/lang/ts/package-scripts.json" "$(node -e 'process.stdout.write(JSON.parse(require("fs").readFileSync(process.argv[1],"utf8")).PROJECT_NAME)' "$VALUES")"
+# No lockfile yet, so create one. The fixture has no dependencies, so this needs no network.
+[ -f package-lock.json ] || npm install --package-lock-only --ignore-scripts --offline --no-audit --no-fund >/dev/null
 
 GOVERNANCE=$(value GOVERNANCE_ENABLED)
 
