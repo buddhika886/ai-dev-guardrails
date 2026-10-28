@@ -133,28 +133,33 @@ fi
 
 block() { echo "BLOCKED: $1${SUFFIX}" >&2; exit 2; }
 
+# Every match below feeds grep from a here-string, never `printf ... | grep -q`. grep -q exits at
+# the first match; under pipefail a writer still holding more than a pipe buffer (64 KiB) then dies
+# of SIGPIPE, the pipeline reports failure, and the match is lost. A long multi-line command would
+# fail open. tests/hook-cases.sh ("a long command must not slip past") holds this in place.
+
 # ======== BLOCK: never from the agent ========
 
 # 1) Production from local: by host/verb pattern.
-if [ -n "$PROD_GUARD_PATTERNS" ] && printf '%s' "$cmd" | grep -qiE "$PROD_GUARD_PATTERNS"; then
+if [ -n "$PROD_GUARD_PATTERNS" ] && grep -qiE "$PROD_GUARD_PATTERNS" <<<"$cmd"; then
   block "this targets PRODUCTION from local. Prod is off-limits from local (CLAUDE.md); prepare the steps for a human to run instead."
 fi
 
 # 1b) Production from local: by prod-bearing env-var name.
 if [ -n "$PROD_ENV_VAR_NAMES" ]; then
   names=$(printf '%s' "$PROD_ENV_VAR_NAMES" | tr ' ' '|')
-  if printf '%s' "$cmd" | grep -qE "$names"; then
+  if grep -qE "$names" <<<"$cmd"; then
     block "command references a production credential/target env var. Prepare the steps for a human to run against prod; do not execute from local (CLAUDE.md)."
   fi
 fi
 
 # 2a) Force-push.
-if printf '%s' "$cmd" | grep -qiE 'git[[:space:]]+push' && printf '%s' "$cmd" | grep -qiE '(--force|--force-with-lease|[[:space:]]-f([[:space:]]|$))'; then
+if grep -qiE 'git[[:space:]]+push' <<<"$cmd" && grep -qiE '(--force|--force-with-lease|[[:space:]]-f([[:space:]]|$))' <<<"$cmd"; then
   block "force-push is not allowed on the shared repo (never force-push over others' history)."
 fi
 
 # 2b) Other destructive git.
-if printf '%s' "$cmd" | grep -qiE 'git[[:space:]]+reset[[:space:]].*--hard|git[[:space:]]+clean[[:space:]]+-[A-Za-z]*f'; then
+if grep -qiE 'git[[:space:]]+reset[[:space:]].*--hard|git[[:space:]]+clean[[:space:]]+-[A-Za-z]*f' <<<"$cmd"; then
   block "destructive git (reset --hard / clean -f). Confirm with the user and run it yourself if truly intended."
 fi
 
@@ -163,17 +168,17 @@ DISCLOSE="this would print a secret into the session transcript, which is stored
 # Committed example files are safe to read; scrub them out before matching so `cat .env.example`
 # is not caught by the `.env*` shape.
 scrubbed=$(printf '%s' "$cmd" | sed -E 's/\.(env|dev\.vars)\.(example|sample|template|dist)([^A-Za-z0-9_-]|$)/\3/g')
-if printf '%s' "$scrubbed" | grep -qiE "$SECRET_FILE_READ"; then block "$DISCLOSE"; fi
-if printf '%s' "$cmd" | grep -qE "$ENV_DUMP"; then block "$DISCLOSE"; fi
-if printf '%s' "$cmd" | grep -qiE "$SECRET_CLIS"; then block "$DISCLOSE"; fi
+if grep -qiE "$SECRET_FILE_READ" <<<"$scrubbed"; then block "$DISCLOSE"; fi
+if grep -qE "$ENV_DUMP" <<<"$cmd"; then block "$DISCLOSE"; fi
+if grep -qiE "$SECRET_CLIS" <<<"$cmd"; then block "$DISCLOSE"; fi
 secret_names="$SECRET_NAME_SHAPE"
 if [ -n "$SECRET_VAR_NAMES" ]; then
   secret_names="${secret_names}|$(printf '%s' "$SECRET_VAR_NAMES" | tr ' ' '|')"
 fi
-if printf '%s' "$cmd" | grep -qE "${B}(echo|printf|print)[^|;&]*\\\$\\{?(${secret_names})([^A-Za-z0-9_]|$)"; then
+if grep -qE "${B}(echo|printf|print)[^|;&]*\\\$\\{?(${secret_names})([^A-Za-z0-9_]|$)" <<<"$cmd"; then
   block "$DISCLOSE"
 fi
-if printf '%s' "$cmd" | grep -qE "${B}printenv[[:space:]]+([^|;&]*[[:space:]])?(${secret_names})([^A-Za-z0-9_]|$)"; then
+if grep -qE "${B}printenv[[:space:]]+([^|;&]*[[:space:]])?(${secret_names})([^A-Za-z0-9_]|$)" <<<"$cmd"; then
   block "$DISCLOSE"
 fi
 
@@ -186,13 +191,13 @@ ask() {
   exit 0
 }
 
-if printf '%s' "$cmd" | grep -qiE "$CONSENT_PATTERNS"; then
+if grep -qiE "$CONSENT_PATTERNS" <<<"$cmd"; then
   ask "Consent required: this commits, pushes, publishes or changes something outside this machine. CLAUDE.md requires your explicit go-ahead each time."
 fi
-if printf '%s' "$cmd" | grep -qiE "$DEPLOY_PATTERNS"; then
+if grep -qiE "$DEPLOY_PATTERNS" <<<"$cmd"; then
   ask "Consent required: this deploys or changes a remote database. Confirm the target is not production, or that you intend it."
 fi
-if printf '%s' "$cmd" | grep -qiE "$REMOTE_CONFIG_PATTERNS"; then
+if grep -qiE "$REMOTE_CONFIG_PATTERNS" <<<"$cmd"; then
   ask "Consent required: this changes remote secrets or config, which the repo cannot see. Record it so it is not later found as unexplained drift."
 fi
 

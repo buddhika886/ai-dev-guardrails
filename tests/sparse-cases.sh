@@ -28,7 +28,7 @@ for want in \
   "[9] Client denylist: SKIPPED" \
   "[11] Governance records: SKIPPED"
 do
-  if printf '%s' "$out" | grep -qF "$want"; then
+  if grep -qF "$want" <<<"$out"; then
     t_pass "reported: $want"
   else
     t_fail "missing skip report: $want" "$out"
@@ -37,13 +37,13 @@ done
 # A skip must never be dressed up as a verified pass.
 # Case-insensitive on purpose: runtime skips were once printed as "✓ skipped (...)" and an
 # uppercase-only match missed them.
-if printf '%s' "$out" | grep -i 'skipped' | grep -qF '✓'; then
+if grep -i 'skipped' <<<"$out" | grep -qF '✓'; then
   t_fail "a SKIPPED line was marked with a tick"
 else
   t_pass "no SKIPPED line is marked as verified"
 fi
 # All eleven checks accounted for, so a reader of the log can audit coverage.
-seen=$(printf '%s' "$out" | grep -cE '^\[([1-9]|1[01])\]')
+seen=$(grep -cE '^\[([1-9]|1[01])\]' <<<"$out")
 if [ "$seen" -eq 11 ]; then
   t_pass "all eleven checks appear in the output"
 else

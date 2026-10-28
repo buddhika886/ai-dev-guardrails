@@ -111,6 +111,11 @@ it must not block ordinary work.
 **Fail closed.** If a check cannot run properly, it must fail, never pass quietly. A check that is
 switched off says `SKIPPED (reason)`, never shows a tick.
 
+**Match with here-strings, not pipes into `grep -q`.** Write `grep -q PATTERN <<<"$text"`, never
+`printf '%s' "$text" | grep -q PATTERN`. Under `pipefail`, `grep -q` exiting at its first match
+kills a writer with more than 64 KiB still to send, and the match is reported as a miss. In the
+command guard that let a long command through unchecked.
+
 **Keep the install test in step with bootstrap.** `tests/install.sh` mirrors
 `.claude/commands/bootstrap.md` step for step. Change both in the same pull request.
 

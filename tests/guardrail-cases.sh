@@ -61,7 +61,7 @@ EOF
 git add -A; git commit -qm "add a new migration (additive, must be accepted)"
 expect_accept "adding a new migration is accepted" "only added (vs base)"
 out=$(GUARDRAILS_BASE=no-such-ref bash scripts/ci-guardrails.sh 2>&1); rc=$?
-if [ "$rc" -eq 0 ] && printf '%s' "$out" | grep -qF "  - SKIPPED (base ref 'no-such-ref' unavailable)"; then
+if [ "$rc" -eq 0 ] && grep -qF "  - SKIPPED (base ref 'no-such-ref' unavailable)" <<<"$out"; then
   t_pass "an unavailable base ref skips cleanly rather than crashing"
 else
   t_fail "unavailable base ref (rc=$rc)" "$out"
@@ -88,16 +88,16 @@ echo "── a runtime skip is never shown as verified"
 # Every way a configured check can skip at runtime, in one run: fast mode (checks 6 and 7) and an
 # unavailable base ref (check 5). None of their lines may carry a tick, in any letter case.
 out=$(GUARDRAILS_FAST=1 GUARDRAILS_BASE=no-such-ref bash scripts/ci-guardrails.sh 2>&1)
-if printf '%s' "$out" | grep -i 'skipped' | grep -qF '✓'; then
+if grep -i 'skipped' <<<"$out" | grep -qF '✓'; then
   t_fail "a runtime skip carries a tick" "$(printf '%s' "$out" | grep -i skipped)"
 else
   t_pass "no runtime skip line carries a tick"
 fi
-n=$(printf '%s' "$out" | grep -cF '  - SKIPPED (')
+n=$(grep -cF '  - SKIPPED (' <<<"$out")
 if [ "$n" -eq 3 ]; then t_pass "all three runtime skips announce themselves"; else t_fail "expected 3 runtime skips, saw $n" "$out"; fi
 rm -rf out
 out=$(GUARDRAILS_BASE=base bash scripts/ci-guardrails.sh 2>&1)
-if printf '%s' "$out" | grep -qF "  - SKIPPED (no out yet, build first)"; then
+if grep -qF "  - SKIPPED (no out yet, build first)" <<<"$out"; then
   t_pass "a missing build output is a skip, not a pass"
 else
   t_fail "missing build output not reported as a skip" "$out"
@@ -107,7 +107,7 @@ reset_project
 echo "── fast mode skips only the expensive checks, and never hides a fast failure"
 mkdir -p out; printf 'const c={SESSION_SECRET:"hunter2"};\n' > out/chunk.js
 out=$(GUARDRAILS_FAST=1 GUARDRAILS_BASE=base bash scripts/ci-guardrails.sh 2>&1); rc=$?
-if [ "$rc" -eq 0 ] && printf '%s' "$out" | grep -qF "  - SKIPPED (fast mode)"; then
+if [ "$rc" -eq 0 ] && grep -qF "  - SKIPPED (fast mode)" <<<"$out"; then
   t_pass "fast mode skips the bundle and schema checks"
 else
   t_fail "fast mode skip (rc=$rc)" "$out"
@@ -115,7 +115,7 @@ fi
 reset_project
 printf '\nlocalStorage.setItem("token", "abc")\n' >> src/app/page.tsx
 out=$(GUARDRAILS_FAST=1 GUARDRAILS_BASE=base bash scripts/ci-guardrails.sh 2>&1); rc=$?
-if [ "$rc" -ne 0 ] && printf '%s' "$out" | grep -qF "browser storage"; then
+if [ "$rc" -ne 0 ] && grep -qF "browser storage" <<<"$out"; then
   t_pass "fast mode still enforces the cheap checks"
 else
   t_fail "fast mode enforcement (rc=$rc)" "$out"
@@ -160,13 +160,13 @@ mkdir -p .guardrails
 printf '# client identifiers\n\nGlobex[[:space:]]+Holdings\n' > .guardrails/denylist.local
 printf '\n// Prepared for Globex Holdings Ltd\n' >> src/server/db.ts
 out=$(guardrails_out); rc=$?
-if [ "$rc" -ne 0 ] && printf '%s' "$out" | grep -qF "denylisted client identifier(s) found" \
-   && printf '%s' "$out" | grep -qF "src/server/db.ts:"; then
+if [ "$rc" -ne 0 ] && grep -qF "denylisted client identifier(s) found" <<<"$out" \
+   && grep -qF "src/server/db.ts:" <<<"$out"; then
   t_pass "a denylisted name in a tracked file is caught, by location"
 else
   t_fail "denylist hit (rc=$rc)" "$out"
 fi
-if printf '%s' "$out" | grep -qi globex; then
+if grep -qi globex <<<"$out"; then
   t_fail "the guardrails output printed the denylisted name" "$out"
 else
   t_pass "the output does not contain the denylisted name"
@@ -188,7 +188,7 @@ echo "── [10] local git hooks installed"
 mv .git/hooks/pre-push .git/hooks/pre-push.parked
 expect_reject "a missing pre-push hook is caught" "pre-push hook not installed"
 out=$(CI=true GUARDRAILS_BASE=base bash scripts/ci-guardrails.sh 2>&1); rc=$?
-if [ "$rc" -eq 0 ] && printf '%s' "$out" | grep -qF "[10] Local git hooks installed: SKIPPED"; then
+if [ "$rc" -eq 0 ] && grep -qF "[10] Local git hooks installed: SKIPPED" <<<"$out"; then
   t_pass "on a CI runner the check is skipped, and says so"
 else
   t_fail "CI skip (rc=$rc)" "$out"
