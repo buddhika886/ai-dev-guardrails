@@ -34,7 +34,7 @@ expect_caught() {
   if [ "$SCAN_RC" -eq 0 ]; then
     t_fail "$label (nothing found)" "$SCAN_OUT"; return
   fi
-  if ! printf '%s' "$SCAN_OUT" | grep -q "RuleID: *$want_rule"; then
+  if ! grep -q "RuleID: *$want_rule" <<<"$SCAN_OUT"; then
     t_fail "$label (caught, but not by $want_rule)" "$SCAN_OUT"; return
   fi
   t_pass "$label"

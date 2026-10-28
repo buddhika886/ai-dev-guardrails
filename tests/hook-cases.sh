@@ -155,6 +155,21 @@ guard_raw ask   "no working parser, a push still asks"   '{"tool_input":{"comman
 guard_raw allow "no working parser, ordinary command"      '{"tool_input":{"command":"npm test"}}'                    "$BROKEN_PATH"
 guard_raw allow "valid payload with no command field"      '{"tool_input":{}}'                                        "$PATH"
 
+echo "── a long command must not slip past"
+# The match is on line 1 and about 200 KB of text follows, well past a 64 KiB pipe buffer. A guard
+# that pipes the command into `grep -q` under pipefail loses the match to SIGPIPE and allows these.
+# The filler is built inside node: a 200 KB command-line argument exceeds Linux's per-argument limit.
+guard_long() {
+  local want="$1" label="$2" first="$3" payload
+  payload=$(node -e 'process.stdout.write(JSON.stringify({tool_name:"Bash",tool_input:{command:process.argv[1]+"\n"+"# filler line\n".repeat(15000)}}))' "$first")
+  guard_decide "$want" "$label" "$payload" "$PATH"
+}
+guard_long ask   "a push followed by 200 KB still asks"       'git push origin main'
+guard_long block "reading .env followed by 200 KB still blocks" 'cat .env'
+guard_long block "printenv followed by 200 KB still blocks"   'printenv'
+guard_long block "prod deploy followed by 200 KB still blocks" 'vercel deploy --prod'
+guard_long allow "an ordinary command followed by 200 KB"     'npm test'
+
 echo "── the Stop hook warns without ever blocking"
 out=$(bash scripts/claude-stop-guardrails.sh 2>&1); rc=$?
 if [ "$rc" -eq 0 ] && [ -z "$out" ]; then
@@ -165,7 +180,7 @@ fi
 
 printf '\nlocalStorage.setItem("token", "abc")\n' >> src/app/page.tsx
 out=$(bash scripts/claude-stop-guardrails.sh 2>&1); rc=$?
-if [ "$rc" -eq 0 ] && printf '%s' "$out" | grep -qF '"systemMessage"' && printf '%s' "$out" | grep -qF 'Guardrails FAILED'; then
+if [ "$rc" -eq 0 ] && grep -qF '"systemMessage"' <<<"$out" && grep -qF 'Guardrails FAILED' <<<"$out"; then
   t_pass "a red project emits a systemMessage and still exits 0"
 else
   t_fail "red project (rc=$rc)" "$out"

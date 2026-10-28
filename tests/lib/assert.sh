@@ -44,7 +44,7 @@ guardrails_out() {
 expect_reject() {
   local label="$1" want="$2" out rc
   out=$(guardrails_out); rc=$?
-  if [ "$rc" -ne 0 ] && printf '%s' "$out" | grep -qF "$want"; then
+  if [ "$rc" -ne 0 ] && grep -qF "$want" <<<"$out"; then
     t_pass "$label"
   else
     t_fail "$label (rc=$rc, expected output containing: $want)" "$out"
@@ -56,7 +56,7 @@ expect_reject() {
 expect_accept() {
   local label="$1" want="$2" out rc
   out=$(guardrails_out); rc=$?
-  if [ "$rc" -eq 0 ] && printf '%s' "$out" | grep -qF "$want"; then
+  if [ "$rc" -eq 0 ] && grep -qF "$want" <<<"$out"; then
     t_pass "$label"
   else
     t_fail "$label (rc=$rc, expected output containing: $want)" "$out"
@@ -73,7 +73,7 @@ guard_decide() {
   out=$(printf '%s' "$input" | env "PATH=$path" bash scripts/claude-bash-guard.sh 2>"$err"); rc=$?
   if [ "$rc" -eq 2 ]; then got=block
   elif [ "$rc" -eq 0 ] && [ -z "$out" ]; then got=allow
-  elif [ "$rc" -eq 0 ] && printf '%s' "$out" | grep -qF '"permissionDecision":"ask"'; then got=ask
+  elif [ "$rc" -eq 0 ] && grep -qF '"permissionDecision":"ask"' <<<"$out"; then got=ask
   else got="unexpected(rc=$rc)"; fi
   if [ "$got" = "$want" ]; then t_pass "[$got] $label"; else t_fail "[$got want=$want] $label" "$out$(cat "$err")"; fi
   rm -f "$err"

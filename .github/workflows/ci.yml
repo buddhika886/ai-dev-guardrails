@@ -103,7 +103,8 @@ jobs:
           set -euo pipefail
           missing=0
           for c in $(git rev-list --no-merges "$BASE..$HEAD"); do
-            if ! git log -1 --format=%B "$c" | grep -qE '^Signed-off-by: .+ <.+>$'; then
+            msg=$(git log -1 --format=%B "$c")
+            if ! grep -qE '^Signed-off-by: .+ <.+>$' <<<"$msg"; then
               echo "::error::commit $(git log -1 --format=%h "$c") has no Signed-off-by line"
               missing=1
             fi
