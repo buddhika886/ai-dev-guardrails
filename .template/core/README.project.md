@@ -15,7 +15,10 @@ the AI's own commands, your machine on commit and push, and CI on every pull req
 1. Install dependencies: `npm ci`
 2. Install the local git hooks: `npx lefthook install`. The guardrails fail until you do, because
    a clone without hooks has no local checks at all.
-3. Run the checks: `npm run guardrails`. You should see `GUARDRAILS PASSED.`
+3. Run the checks: `npm run guardrails`. You should see `GUARDRAILS PASSED.` It needs npm 11.10
+   or later (Node 24 ships it), because older npm ignores the release cooldown in `.npmrc`.
+4. Optional: install [OSV-Scanner](https://google.github.io/osv-scanner/) so `git push` also scans
+   dependencies for known vulnerabilities. CI runs it either way.
 
 ### One-time GitHub setup (repository owner)
 
@@ -29,8 +32,8 @@ settings, so no file in the repo can turn them on for you:
 2. **Secret scanning.** On the same page, enable **Secret scanning** and **Push protection**, so
    GitHub also rejects a pushed secret.
 3. **Protect `main`.** In **Settings → Rules → Rulesets**, add a branch ruleset for `main`: require
-   a pull request with at least one approval, require the `verify` and `secrets` checks to pass, and
-   block force pushes.
+   a pull request with at least one approval, require the `verify`, `dependencies` and `secrets`
+   checks to pass, and block force pushes.
 4. **Read-only CI token.** In **Settings → Actions → General → Workflow permissions**, choose
    **Read repository contents**.
 5. **Client denylist** (client work only). In **Settings → Secrets and variables → Actions**, add a
@@ -48,8 +51,11 @@ gh api -X PUT repos/OWNER/REPO/automated-security-fixes    # Dependabot security
 - **It asks before anything leaves your machine:** commits, pushes, pull requests, publishes,
   deploys, remote migrations, remote secret and config changes. Every time, even if someone clicked
   "don't ask again" earlier.
+- **It asks before adding a package** (`npm install <name>`, `pnpm add`, `yarn add`), because a
+  package name an assistant suggests may not be the one you meant.
 - **It is blocked from a few things outright:** touching production from your laptop, rewriting
-  shared git history, and printing secrets into the chat (for example `cat .env` or `printenv`).
+  shared git history, printing secrets into the chat (for example `cat .env` or `printenv`), and
+  switching off the dependency policy in `.npmrc`.
 - **It warns at the end of a turn** if any guardrail check has gone red.
 
 ### Where the rules live

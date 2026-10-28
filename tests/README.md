@@ -42,7 +42,7 @@ directory outside the repo, because the guardrail scripts resolve their root wit
 **A** turns everything on, so every check has something to enforce. **B** fills five tokens with the
 empty string, which is the path worth testing hardest: an empty regex can turn a check into a no-op
 that still reports success. B asserts that a check disabled by configuration says `SKIPPED` and is
-never marked with a tick, that all eleven checks account for themselves in the log, and that the
+never marked with a tick, that all twelve checks account for themselves in the log, and that the
 checks which remain still bite (including consent prompts and secret blocking with no production
 configured).
 

@@ -4,7 +4,7 @@
   "PROJECT_NAME": "acme-portal",
   "LANGUAGE_SPELLING": "British English",
   "SOURCE_OF_TRUTH_DOCS": "docs/PRD.md: product requirements\n- docs/runbook.md: operational runbook",
-  "LOCAL_TOOLCHAIN": "Node 20 + npm",
+  "LOCAL_TOOLCHAIN": "Node 24 + npm",
 
   "LANG_LINT_GLOB": "*.{ts,tsx,js,jsx,json,jsonc}",
   "LANG_LINT_CMD": "npx --no-install biome check --no-errors-on-unmatched",

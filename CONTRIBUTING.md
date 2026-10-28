@@ -47,7 +47,7 @@ The `dco` job in CI fails any pull request with an unsigned commit.
 
 ## Setting up
 
-You need git, Node 20, and these tools:
+You need git, Node 24, and these tools:
 
 | Tool          | Why                                                        |
 | ------------- | ---------------------------------------------------------- |

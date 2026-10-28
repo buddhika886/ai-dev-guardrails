@@ -2,10 +2,11 @@
 # "works on my machine". /bootstrap copies this to .github/workflows/ci.yml.
 #
 # Parity with local: the `verify` job runs the same commands as the Lefthook pre-push hook
-# (typecheck, build, guardrails) plus lint, and the `secrets` job runs the same gitleaks scan as the
-# pre-commit hook but over full history. If you change a check here, change it in lefthook.yml too.
+# (typecheck, build, guardrails) plus lint, the `dependencies` job runs the same OSV-Scanner scan as
+# pre-push, and the `secrets` job runs the same gitleaks scan as the pre-commit hook but over full
+# history. If you change a check here, change it in lefthook.yml too.
 #
-# Enable branch protection on main: require both jobs to pass and at least one review; disallow
+# Enable branch protection on main: require all three jobs to pass and at least one review; disallow
 # force-push.
 #
 # Actions are pinned to full commit SHAs (with the release as a comment), so a moved or hijacked tag
@@ -34,6 +35,15 @@ jobs:
           node-version-file: .nvmrc
           cache: npm
       - run: npm ci
+      - name: Registry signatures (tampered or unsigned packages)
+        # npm audit signatures errors when there is nothing installed to check, so a project with no
+        # dependencies yet says so instead.
+        run: |
+          if node -e 'process.exit(Object.keys(require("./package-lock.json").packages || {}).length > 1 ? 0 : 1)'; then
+            npm audit signatures
+          else
+            echo "SKIPPED (no dependencies to verify yet)"
+          fi
       - run: npm run typecheck
       - run: npm run lint
       - run: npm run build
@@ -46,6 +56,41 @@ jobs:
           # path:line, never the match.
           GUARDRAILS_DENYLIST: ${{ secrets.GUARDRAILS_DENYLIST }}
         run: npm run guardrails
+
+  dependencies:
+    # Known vulnerabilities in package-lock.json, from the OSV database (GitHub, npm and other
+    # advisory sources). Any finding fails the job. To accept one for a while, list it in
+    # osv-scanner.toml with an ignoreUntil date and a reason, in a reviewed pull request: the
+    # exception expires on that date and the job goes red again.
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: Install OSV-Scanner (checksum pinned in this file)
+        env:
+          # ---- Pinned release. To bump: pick a new version, copy the sha256 for
+          # osv-scanner_linux_amd64 from that release's osv-scanner_SHA256SUMS into SHA256 below,
+          # and update VERSION. As with gitleaks, the checksum is pinned here, never fetched at
+          # build time. ----
+          VERSION: "2.7.0"
+          SHA256: "160c6253e2922e9e0a6a9771c5c4c40a4b3c6090b34a3cdd5e80c96cc2e4218b"
+        run: |
+          set -euo pipefail
+          BIN="osv-scanner_linux_amd64"
+          curl -sSLo "$BIN" "https://github.com/google/osv-scanner/releases/download/v${VERSION}/${BIN}"
+          echo "${SHA256}  ${BIN}" | sha256sum -c -
+          sudo install "$BIN" /usr/local/bin/osv-scanner
+          osv-scanner --version
+      - name: Scan dependencies for known vulnerabilities
+        # A missing lockfile is an error (exit 127), not a pass. OSV-Scanner also exits non-zero on a
+        # lockfile with no packages, so a project with no dependencies yet says so instead.
+        run: |
+          if node -e 'process.exit(Object.keys(require("./package-lock.json").packages || {}).length > 1 ? 0 : 1)' 2>/dev/null; then
+            osv-scanner scan source --lockfile package-lock.json
+          elif [ -f package-lock.json ]; then
+            echo "SKIPPED (no dependencies to scan yet)"
+          else
+            echo "package-lock.json is missing"; exit 1
+          fi
 
   secrets:
     runs-on: ubuntu-latest

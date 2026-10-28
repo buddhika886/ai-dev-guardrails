@@ -80,6 +80,26 @@ diff it against the committed dump; a difference fails the build. When you chang
 migration and regenerate the committed dump in the same change. Never hand-edit the dump to make the
 check pass.
 
+## Dependencies (supply chain)
+
+Every package added is code from a stranger that runs with this project's permissions.
+
+- Prefer the platform and the packages already installed. Add a dependency only when the task needs
+  it, and say why in the commit.
+- Before adding one, check the name is the package you meant: assistants suggest plausible names
+  that do not exist, and attackers register them. Confirm it on the registry (`npm view <name>`)
+  and look at its age, maintainers and downloads.
+- The bash guard asks before any package is added (`npm install <name>`, `pnpm add`, `yarn add`,
+  one-shot runners other than `npx`) and before install scripts are approved. If the user declines,
+  do not reach the same package another way.
+- Never weaken the policy in `.npmrc`: the 7-day release cooldown, registry-only dependencies and
+  reviewed install scripts. The guard blocks overriding it with a flag or environment variable,
+  editing `.npmrc` asks every time, and guardrail check [12] fails if it is weakened. If a fix is
+  urgent, propose a `min-release-age-exclude` entry for that one package and let the user decide.
+- CI scans `package-lock.json` for known vulnerabilities (OSV-Scanner) and checks registry
+  signatures. Fix a finding by upgrading; an accepted exception goes in `osv-scanner.toml` with an
+  `ignoreUntil` date and a reason, in a reviewed change.
+
 ## Evidence standard (hard rule)
 
 Claims of completion are not accepted; observable output is.
@@ -111,6 +131,10 @@ Say these plainly in any security write-up rather than describing the controls a
 - Nothing here can recall a secret once it has reached the transcript. Rotation is the only remedy.
 - The client denylist sees what it is given: CI enforces it only when `GUARDRAILS_DENYLIST` is set,
   and it does not scan commit messages or history.
+- The release cooldown applies when npm chooses versions (`npm install`, `npm update`), not when
+  `npm ci` installs a lockfile already reviewed. Check [12] and the guard cover npm only: pnpm,
+  yarn and bun have their own settings (see `docs/configuring-rules.md`). A vulnerability scan finds
+  only what has been reported; a brand-new malicious package is the cooldown's job.
 
 ## Working conventions
 

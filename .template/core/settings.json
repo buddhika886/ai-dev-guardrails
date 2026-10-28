@@ -10,7 +10,9 @@
       "Bash(pnpm publish *)",
       "Bash(yarn publish *)",
       "Bash(yarn npm publish *)",
-      "Bash(bun publish *)"
+      "Bash(bun publish *)",
+      "Edit(.npmrc)",
+      "Write(.npmrc)"
     ],
     "deny": [
       "Read(.env)",

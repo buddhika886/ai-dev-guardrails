@@ -82,6 +82,27 @@ REMOTE_CONFIG_PATTERNS+="|${B}fly(ctl)?[[:space:]]+secrets[[:space:]]+(set|unset
 REMOTE_CONFIG_PATTERNS+="|${B}supabase[[:space:]]+secrets[[:space:]]+(set|unset)"
 REMOTE_CONFIG_PATTERNS+="|${B}heroku[[:space:]]+config:(set|unset)"
 
+# Adding a dependency. A new package is a supply-chain decision: it may be vulnerable, malicious, or
+# a name an assistant made up. `npm install` and `npm ci` with no package name only install what the
+# lockfile already holds, so they stay allowed; so does `npx`, whose downloads obey the .npmrc
+# cooldown and script policy. pnpm, yarn and bun do not read npm's policy, so their adds and one-shot
+# runners ask too. Approving install scripts is the same decision by another route.
+PKG_FLAGS='([[:space:]]+-[^[:space:]]*)*'
+DEPENDENCY_PATTERNS="${B}npm[[:space:]]+(install|i|in|add|isntall)${PKG_FLAGS}[[:space:]]+[^-[:space:]|;&]"
+DEPENDENCY_PATTERNS+="|${B}(pnpm|yarn|bun)[[:space:]]+add([[:space:]]|$)"
+DEPENDENCY_PATTERNS+="|${B}bun[[:space:]]+(install|i)${PKG_FLAGS}[[:space:]]+[^-[:space:]|;&]"
+DEPENDENCY_PATTERNS+="|${B}(pnpm|yarn)[[:space:]]+dlx([[:space:]]|$)|${B}bunx([[:space:]]|$)"
+DEPENDENCY_PATTERNS+="|${B}npm[[:space:]]+approve-scripts"
+
+# Switching off the dependency policy in .npmrc for one command. Every key here would let a
+# brand-new, unreviewed or non-registry package in. Changing the policy is a reviewed edit to .npmrc,
+# never a flag or an environment variable the agent sets on the way past. Environment variables
+# override the project .npmrc, so they are matched too.
+DEP_POLICY_KEYS='(min-release-age|before|allow-git|allow-remote|strict-allow-scripts|dangerously-allow-all-scripts|registry)'
+DEP_WEAKEN="${B}(npm|npx|pnpm|yarn|bun)[^|;&]*[[:space:]]--(no-)?${DEP_POLICY_KEYS}([=[:space:]]|$)"
+DEP_WEAKEN+="|${B}npm[[:space:]]+config[[:space:]]+(edit|(set|delete|rm)[^|;&]*${DEP_POLICY_KEYS})"
+DEP_WEAKEN+="|npm_config_(min_release_age|before|allow_git|allow_remote|strict_allow_scripts|dangerously_allow_all_scripts|registry)"
+
 # Secret disclosure. These print a secret into the session transcript, where it is stored and can
 # outlive any rotation. Blocked, not redacted: a home-made redaction pipe that fails open leaks the
 # value it was meant to hide, and nothing downstream can take it back.
@@ -182,6 +203,11 @@ if grep -qE "${B}printenv[[:space:]]+([^|;&]*[[:space:]])?(${secret_names})([^A-
   block "$DISCLOSE"
 fi
 
+# 4) Switching off the dependency policy.
+if grep -qiE "$DEP_WEAKEN" <<<"$cmd"; then
+  block "this overrides the dependency policy in .npmrc (release cooldown, install-script approval, git/URL dependencies or the registry). Change .npmrc in a reviewed pull request instead; never bypass it for one command."
+fi
+
 # ======== ASK: fresh consent every time ========
 
 # Emits a PreToolUse "ask" decision. The reason is built from fixed strings with no quotes or
@@ -199,6 +225,9 @@ if grep -qiE "$DEPLOY_PATTERNS" <<<"$cmd"; then
 fi
 if grep -qiE "$REMOTE_CONFIG_PATTERNS" <<<"$cmd"; then
   ask "Consent required: this changes remote secrets or config, which the repo cannot see. Record it so it is not later found as unexplained drift."
+fi
+if grep -qiE "$DEPENDENCY_PATTERNS" <<<"$cmd"; then
+  ask "Consent required: this adds a dependency or approves install scripts. Check the package name is the one you meant (assistants invent plausible names), that it is maintained, and that the project needs it."
 fi
 
 exit 0

@@ -8,7 +8,8 @@ tokens in the core files; the files listed are copied into the project.
 | Source (this dir)      | Destination            | Notes                                              |
 | ---------------------- | ---------------------- | -------------------------------------------------- |
 | `biome.json`           | `biome.json`           | Strict defaults: recommended + security rules on.  |
-| `.nvmrc`               | `.nvmrc`               | Pins Node 20 so local, CI, and build agree.        |
+| `.nvmrc`               | `.nvmrc`               | Pins Node 24 (ships npm 11.10+, which the cooldown needs). |
+| `.npmrc`               | `.npmrc`               | Dependency policy: 7-day release cooldown, registry-only dependencies, reviewed install scripts. Check [12] enforces it. |
 | `package-scripts.json` | merged into `package.json` | `scripts` block; `build` is a hand-filled placeholder. |
 | `eslint-escape-hatch.md` | `docs/eslint-escape-hatch.md` | Reference, only if the team wants ESLint later. |
 | `tsconfig-note.md`     | `docs/tsconfig-note.md` | Why typecheck uses the project's own tsconfig.      |

@@ -99,11 +99,18 @@ Do these in order. Show the user what you are doing at each step.
      `.claude/openrouter.settings.json` (append any that are missing; create `.gitignore` if there
      is none). The first keeps the client denylist out of git; the second keeps per-machine
      permission approvals out of the shared repo; the third keeps a developer's OpenRouter key out.
-2. **Copy the language fragment** (TypeScript): `biome.json`, `.nvmrc` to the repo root;
+2. **Copy the language fragment** (TypeScript): `biome.json`, `.nvmrc`, `.npmrc` to the repo root;
    `eslint-escape-hatch.md` and `tsconfig-note.md` → `docs/`. Merge `package-scripts.json`'s
    `scripts` block into `package.json` (create a minimal `package.json` first if none exists). Leave
    the `build` placeholder for the user to fill and tell them so. Do not copy `fragment.md` itself:
    it is bootstrap's own lookup table, not project documentation.
+   - If the project already has an `.npmrc`, merge: keep its other lines and add or tighten the four
+     policy lines; never loosen one. Show the user the result.
+   - If there is no `package-lock.json`, create it with `npm install --package-lock-only
+     --ignore-scripts`. Check [12] needs one, and CI's `npm ci` refuses to run without it.
+   - If an existing lockfile fails check [12] in Step 6 (a git or URL dependency, a missing hash),
+     report the entries to the user and stop: replacing a dependency is their decision, not
+     bootstrap's.
 2a. **Copy the governance tier** (only if governance is on):
    - `.template/governance/EVIDENCE.md` → `docs/governance/EVIDENCE.md`
    - `.template/governance/DECISIONS.md` → `docs/governance/DECISIONS.md`
@@ -151,7 +158,7 @@ that fills it. Empty-allowed tokens are marked.
 | `{{PROJECT_NAME}}`        | Directory name, confirmed at Step 3                                      | no            |
 | `{{LANGUAGE_SPELLING}}`   | Step 3 convention (default British English)                              | no            |
 | `{{SOURCE_OF_TRUTH_DOCS}}`| Step 3 source-of-truth docs list                                         | no            |
-| `{{LOCAL_TOOLCHAIN}}`     | Q1 stack (e.g. "Node 20 + npm")                                          | no            |
+| `{{LOCAL_TOOLCHAIN}}`     | Q1 stack (e.g. "Node 24 + npm")                                          | no            |
 | `{{LANG_LINT_GLOB}}`      | Q1 → `fragment.md` token values                                          | no            |
 | `{{LANG_LINT_CMD}}`       | Q1 → `fragment.md` token values                                          | no            |
 | `{{UNSAFE_SQL}}`          | Q1 → `fragment.md` default                                               | no            |
