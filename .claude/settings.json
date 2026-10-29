@@ -8,13 +8,9 @@
       "Bash(gh pr merge *)",
       "Bash(gh release create *)",
       "Edit(.template/core/**)",
-      "Write(.template/core/**)",
       "Edit(.claude/commands/bootstrap.md)",
-      "Write(.claude/commands/bootstrap.md)",
       "Edit(.github/workflows/ci.yml)",
-      "Write(.github/workflows/ci.yml)",
-      "Edit(.gitleaks.toml)",
-      "Write(.gitleaks.toml)"
+      "Edit(.gitleaks.toml)"
     ],
     "deny": [
       "Read(.env)",

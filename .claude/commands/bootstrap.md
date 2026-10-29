@@ -51,8 +51,10 @@ assumed. If `AskUserQuestion` is not available in this session, ask the same que
 time in text, with the options numbered, and wait for each answer.
 
 The first option of every question is a safe default. A user who picks the first option every time
-ends up with a working, safe project; that is the design, not an accident. Every option list ends
-with an "Other" that the tool adds itself, so free text (a path, a name) always has a way in.
+ends up with a working, safe project; that is the design, not an accident. Two rules about the
+tool: it needs at least two real options, so every question below has two or more and "Other" is
+never counted as one; and choosing an option gives no text field, so anything that needs typing
+(paths, names, a command) is its own follow-up question, never an option that says "type it".
 
 Before the first question, run `basename "$PWD"` and `gh api user -q .login 2>/dev/null || true`
 so the defaults below can be filled in. Read `.template/lang/ts/fragment.md` for the prefix and
@@ -62,7 +64,10 @@ bundle table.
 
 **B1. Project name.** "What is the project called? This names the README and the rules file."
 - `<directory name>` (recommended): the folder you are in
-- Other: type a name
+- `<directory name, lower-case with hyphens>`: the same name tidied for npm, if it differs
+- A different name: I'll ask for it next
+
+**B1b. Only if "a different name".** "What should the project be called?" (text answer)
 
 **B2. Spelling.** "Which spelling should the written rules and docs use?"
 - British English (recommended): organisation, optimise
@@ -70,9 +75,9 @@ bundle table.
 
 ### Q1. Stack
 
-**Q1a. Framework.** "What is the project built with? Only TypeScript is supported in this release;
-Python and React Native come later. The framework decides which settings are allowed to reach the
-browser and where the built app lands."
+**Q1a. Framework.** "What is the project built with, or going to be? The kit does not create the
+app; it sets the rules up around it, so the answer only tells the checks where to look. Only
+TypeScript is supported in this release; Python and React Native come later."
 - Next.js: `NEXT_PUBLIC_` settings reach the browser
 - Vite-based (React, SvelteKit): `VITE_` settings reach the browser; built app in `dist`
 - Astro or Remix: I'll ask which next
@@ -99,9 +104,12 @@ Derive `{{PUBLIC_VAR_PREFIX}}` and `{{BUNDLE_DIR}}` from the fragment table.
 **Q2a. Layout.** "Is this one package or several? The kit needs to know where browser code and
 server code live, because different rules apply to each."
 - Single package (recommended if unsure): one `package.json` at the root
-- Monorepo: several packages; type the package paths, for example `apps/web packages/api`
+- Monorepo: several packages, each with its own `package.json`
 
-**Q2b. Browser code.** "Which folder holds the code that runs in the browser? The kit checks that
+**Q2a-paths. Only if monorepo.** "Which folders hold the packages? Space-separated, for example
+`apps/web packages/api`." (text answer)
+
+**Q2b. Browser code.** "Which folders hold the code that runs in the browser? The kit checks that
 no secrets and no browser storage end up there." Options: the framework's usual folder first
 (`src/app src/components` for Next.js, `src` for Vite and Astro, `app` for Remix), then
 `src/client`, then Other.
@@ -130,7 +138,10 @@ schema, and where should the committed copy live? The kit compares the two so a 
 hand shows up in review."
 - Skip for now (recommended if unsure): the schema check is switched off and says so
 - Prisma: `npx prisma migrate diff --from-empty --to-schema-datamodel prisma/schema.prisma --script`, saved to `db/schema.sql`
-- Other: type the command and the file path
+- Another tool: I'll ask for the command and the file path next
+
+**Q3b-detail. Only if "another tool".** "What command prints the schema, and where should the
+committed copy live?" (text answer)
 
 ### Q4. Production
 
@@ -138,9 +149,12 @@ hand shows up in review."
 it from your computer, and asks before every deploy either way."
 - None yet (recommended if unsure): deploys still ask; add the host later in
   `scripts/claude-bash-guard.sh`
-- Yes, describe it: type the production host or connection (for example `db.prod.example.com`),
-  how production changes are meant to happen (for example "deploys run from GitHub only"), and the
-  names of any settings that point at production (for example `PROD_DATABASE_URL`)
+- Yes, there is one: I'll ask three short questions about it next
+
+**Q4a-detail. Only if there is production.** Three text questions, one at a time: "What is the
+production host or connection? For example `db.prod.example.com`." "How are production changes
+meant to happen? For example 'deploys run from GitHub only'." "Which settings point at production?
+For example `PROD_DATABASE_URL`; 'none' is fine."
 
 **Q4b. Secret settings.** "Which settings must never be shown? The kit blocks the AI from printing
 these into the chat and checks they never reach browser code or the built app. Anything named with
@@ -148,42 +162,53 @@ SECRET, TOKEN, PASSWORD, API_KEY or CREDENTIALS is already covered; name the oth
 - None beyond the usual names (recommended if unsure): the built-in patterns cover you; add names
   later in `docs/configuring-rules.md`
 - Typical set: `DATABASE_URL SESSION_SECRET STRIPE_SECRET_KEY`
-- Other: type the names, separated by spaces
+- My own list: I'll ask for the names next
+
+**Q4b-names. Only if "my own list".** "Which names? Separated by spaces." (text answer)
 
 **Q4c. Public setting.** Only if Q1 gave a public prefix. "Which setting is allowed to be public?
 Anything starting with `<prefix>` is sent to every visitor's browser, so the kit only allows the
 ones you name."
 - None yet (recommended if unsure): the kit fails if any public setting appears, until you add it
 - `<prefix>APP_URL`: the site's own address, the usual first one
-- Other: type the names, separated by spaces
+- My own list: I'll ask for the names next
+
+**Q4c-names. Only if "my own list".** "Which names? Separated by spaces." (text answer)
 
 ### Q5. Tiers
 
-**Q5. Extras** (`multiSelect`). "Which records do you want alongside the code? Choose any; none is
-fine."
+**Q5. Extras** (`multiSelect`). "Which records do you want alongside the code? Choose any, or
+none for the core guardrails only."
 - Governance records (recommended for client, regulated or audited work): an evidence log where
   "done" needs proof, a decision record where every exception has a cost, an end date and an owner,
   phase briefs, and a pull request template
 - Security tier: switched on already if you said yes to personal data; choosing it here records the
   choice (its files arrive in a later release)
-- Core only: just the guardrails
 
 ### Ownership and licence
 
 **O1. Source documents.** "Are there documents the AI should treat as the source of truth, such as
 a spec, a PRD or a runbook? They are linked from the rules file so the AI reads them first."
 - None yet (recommended if unsure): the rules file says so; add links later
-- Other: type paths or links
+- `README.md`: the project README is the source of truth for now
+- Some documents: I'll ask for the paths or links next
+
+**O1-paths. Only if "some documents".** "Which documents? Paths or links." (text answer)
 
 **O2. Guardrail owners.** "Who must review any change to the safety rules? This is written into
 `.github/CODEOWNERS`, so no one can weaken a guardrail without their approval."
 - `@<handle from gh>` (recommended): you
-- Other: a GitHub handle or team, for example `@acme/platform`
+- A team: I'll ask for the team handle next, for example `@acme/platform`
+
+**O2-team. Only if "a team".** "Which GitHub handle or team?" (text answer)
 
 **O3. Licence.** "Should the code carry an open-source licence? For client or internal work, no
 licence file is the safe default: the code stays all rights reserved."
 - No licence file (recommended for client and internal work)
-- MIT: open source; type the copyright holder, for example "Jane Doe and contributors"
+- MIT: open source; I'll ask who holds the copyright next
+
+**O3-holder. Only if MIT.** "Who holds the copyright? For example 'Jane Doe and contributors'."
+(text answer)
 
 The template's own `LICENSE` names the template's author, so it is never kept as it is.
 
@@ -238,7 +263,13 @@ Do these in order. Show the user what you are doing at each step.
    it is bootstrap's own lookup table, not project documentation.
    - If the project already has an `.npmrc`, merge: keep its other lines and add or tighten the four
      policy lines; never loosen one. Show the user the result.
-   - If there is no `package-lock.json`, create it with `npm install --package-lock-only
+   - **Install the linter.** The lint hook runs `npx --no-install biome`, so Biome must be a dev
+     dependency, pinned to the version `biome.json` is written for (the version in its `$schema`
+     URL): `npm install --save-dev --save-exact @biomejs/biome@<version>`. If `.npmrc`'s
+     install-script rule refuses Biome's install script, approve that exact version with
+     `npm approve-scripts @biomejs/biome` and show the user the `allowScripts` entry it adds. This
+     is the one package bootstrap adds; say so.
+   - If there is still no `package-lock.json`, create it with `npm install --package-lock-only
      --ignore-scripts`. Check [12] needs one, and CI's `npm ci` refuses to run without it.
    - If an existing lockfile fails check [12] in Step 6 (a git or URL dependency, a missing hash),
      report the entries to the user and stop: replacing a dependency is their decision, not
@@ -297,8 +328,8 @@ that fills it. Empty-allowed tokens are marked.
 | `{{STORAGE_PATTERNS}}`    | Q1 → `fragment.md` default                                               | no            |
 | `{{PUBLIC_VAR_PREFIX}}`   | Q1 framework → `fragment.md` prefix table                                | yes (no prefix) |
 | `{{BUNDLE_DIR}}`          | Q1 framework → `fragment.md` prefix/bundle table                         | yes (SSR/none) |
-| `{{CLIENT_DIR}}`          | Q2 repo shape (client code dir)                                          | no            |
-| `{{SERVER_DIRS}}`         | Q2 repo shape (server/edge dirs, space-separated)                        | no            |
+| `{{CLIENT_DIR}}`          | Q2b (client code dirs, space-separated)                                  | no            |
+| `{{SERVER_DIRS}}`         | Q2c (server/edge dirs, space-separated)                                  | no            |
 | `{{MIGRATIONS_DIR}}`      | Q2 repo shape / Q3 (migrations folder)                                   | yes (no DB)   |
 | `{{SECRET_FILE_PATTERNS}}`| Q3 data + defaults (`.csv` left out; noisy)                              | no            |
 | `{{ALLOWED_TRACKED}}`     | Derived default (`.env.example`, `.dev.vars.example`)                    | no            |
@@ -352,6 +383,19 @@ empty. Prod safety by process still applies.
    that must never be committed (the client's legal name, for example), and set the same lines as
    the `GUARDRAILS_DENYLIST` repository secret for CI. Do not ask them to type the names into the
    chat: the transcript is stored, and the list exists to keep those names out of stored text.
+10. **Close.** Once the user has decided about the commit, end with this, filled in:
+
+    > Guardrails are set up for <project name>. Restart Claude Code now (quit and run `claude`
+    > again from this folder): the new rules load at startup, and this session still has the old
+    > ones. Then you can start coding.
+    > This set up the guardrails only; it did not create an app. <If the folder has no app code:
+    > Add yours next, for example `npx create-next-app@latest .` for Next.js, then set the `build`
+    > script in package.json; until then the pre-push checks (typecheck and build) will fail, by
+    > design.>
+    > From now on I ask before anything leaves this machine, I'm blocked from printing secrets or
+    > touching production, and the checks run on every commit, push and pull request.
+    > Next: <the one-time GitHub setup, if on GitHub> <and the client denylist, if a client project>.
+    > How it all works: docs/five-layers.md. To change a rule: docs/configuring-rules.md.
 
 ## Step 6: Failure discipline
 

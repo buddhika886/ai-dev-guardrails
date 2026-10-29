@@ -19,7 +19,7 @@ cd "$(git rev-parse --show-toplevel 2>/dev/null || echo .)" || exit 1
 # carry CSVs. ALLOWED_TRACKED subtracts the known-safe example files.
 SECRET_FILE_PATTERNS='{{SECRET_FILE_PATTERNS}}'
 ALLOWED_TRACKED='{{ALLOWED_TRACKED}}'
-CLIENT_DIR='{{CLIENT_DIR}}'                 # client code: no secret names, no browser storage
+CLIENT_DIR='{{CLIENT_DIR}}'                 # client code dirs (space-separated): no secret names, no browser storage
 SERVER_DIRS='{{SERVER_DIRS}}'               # server/edge code: parameterised SQL only
 PUBLIC_VAR_PREFIX='{{PUBLIC_VAR_PREFIX}}'   # framework public-env prefix ('' to skip check 2)
 PUBLIC_VAR_ALLOWLIST='{{PUBLIC_VAR_ALLOWLIST}}'   # space-separated allowed public vars
@@ -76,23 +76,14 @@ Bash(yarn publish *)
 Bash(yarn npm publish *)
 Bash(bun publish *)
 Edit(.npmrc)
-Write(.npmrc)
 Edit(scripts/claude-bash-guard.sh)
-Write(scripts/claude-bash-guard.sh)
 Edit(scripts/ci-guardrails.sh)
-Write(scripts/ci-guardrails.sh)
 Edit(scripts/claude-stop-guardrails.sh)
-Write(scripts/claude-stop-guardrails.sh)
 Edit(lefthook.yml)
-Write(lefthook.yml)
 Edit(.github/workflows/ci.yml)
-Write(.github/workflows/ci.yml)
 Edit(.github/CODEOWNERS)
-Write(.github/CODEOWNERS)
 Edit(.gitleaks.toml)
-Write(.gitleaks.toml)
-Edit(CLAUDE.md)
-Write(CLAUDE.md)'
+Edit(CLAUDE.md)'
 REQUIRED_DENY_RULES='Read(.env)
 Read(.env.*)
 Read(.dev.vars)
@@ -137,14 +128,16 @@ if [ -n "$PUBLIC_VAR_PREFIX" ]; then
   echo "[2] Only allowlisted ${PUBLIC_VAR_PREFIX}* are public; no server secrets in $CLIENT_DIR"
   # shellcheck disable=SC2086 # allowlist is intentionally word-split into lines
   allow=$(printf '%s\n' $PUBLIC_VAR_ALLOWLIST)
-  pub=$(grep -rhoE "${PUBLIC_VAR_PREFIX}[A-Z0-9_]+" "$CLIENT_DIR" 2>/dev/null | sort -u | grep -vxF "$allow" || true)
+  # shellcheck disable=SC2086 # CLIENT_DIR is intentionally word-split into multiple paths
+  pub=$(grep -rhoE "${PUBLIC_VAR_PREFIX}[A-Z0-9_]+" $CLIENT_DIR 2>/dev/null | sort -u | grep -vxF "$allow" || true)
   if [ -n "$pub" ]; then fail "disallowed public var(s) in $CLIENT_DIR:"; echo "$pub" | sed 's/^/      /'; else ok "only allowlisted public vars"; fi
   # An empty name list must not become an empty regex, which matches every line.
   if [ -z "${SECRET_VAR_NAMES// /}" ]; then
     skip_note "no SECRET_VAR_NAMES configured; the guard's name-shape patterns still apply"
   else
     names=$(printf '%s' "$SECRET_VAR_NAMES" | tr ' ' '|')
-    sec=$(grep -rnE "$names" "$CLIENT_DIR" 2>/dev/null || true)
+    # shellcheck disable=SC2086
+    sec=$(grep -rnE "$names" $CLIENT_DIR 2>/dev/null || true)
     if [ -n "$sec" ]; then fail "server-secret name(s) in $CLIENT_DIR:"; echo "$sec" | sed 's/^/      /'; else ok "no server-secret names in $CLIENT_DIR"; fi
   fi
 else
@@ -157,7 +150,8 @@ unsafe=$(grep -rnE "$UNSAFE_SQL" $SERVER_DIRS 2>/dev/null || true)
 if [ -n "$unsafe" ]; then fail "non-parameterised SQL:"; echo "$unsafe" | sed 's/^/      /'; else ok "all SQL parameterised"; fi
 
 echo "[4] No browser storage in $CLIENT_DIR"
-store=$(grep -rnE "$STORAGE_PATTERNS" "$CLIENT_DIR" 2>/dev/null || true)
+# shellcheck disable=SC2086
+store=$(grep -rnE "$STORAGE_PATTERNS" $CLIENT_DIR 2>/dev/null || true)
 if [ -n "$store" ]; then fail "browser storage in $CLIENT_DIR:"; echo "$store" | sed 's/^/      /'; else ok "none"; fi
 
 if [ -n "$MIGRATIONS_DIR" ]; then

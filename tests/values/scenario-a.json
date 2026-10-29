@@ -13,7 +13,7 @@
 
   "PUBLIC_VAR_PREFIX": "NEXT_PUBLIC_",
   "BUNDLE_DIR": "out",
-  "CLIENT_DIR": "src/app",
+  "CLIENT_DIR": "src/app src/components",
   "SERVER_DIRS": "src/server src/app/api",
   "MIGRATIONS_DIR": "migrations",
 
