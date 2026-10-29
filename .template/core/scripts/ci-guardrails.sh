@@ -60,7 +60,8 @@ gh secret set API_KEY
 npm install left-pad
 pnpm add left-pad
 cat .env
-printenv'
+printenv
+sed -i s/exit 2/exit 0/ scripts/claude-bash-guard.sh'
 # Rules that .claude/settings.json must keep, in full. Ask rules are evaluated before allow rules, so
 # they hold even when an allowlist wildcard matches the same command; deny rules stop the Read tool
 # opening secret files. Keep in step with .template/core/settings.json.
@@ -75,7 +76,23 @@ Bash(yarn publish *)
 Bash(yarn npm publish *)
 Bash(bun publish *)
 Edit(.npmrc)
-Write(.npmrc)'
+Write(.npmrc)
+Edit(scripts/claude-bash-guard.sh)
+Write(scripts/claude-bash-guard.sh)
+Edit(scripts/ci-guardrails.sh)
+Write(scripts/ci-guardrails.sh)
+Edit(scripts/claude-stop-guardrails.sh)
+Write(scripts/claude-stop-guardrails.sh)
+Edit(lefthook.yml)
+Write(lefthook.yml)
+Edit(.github/workflows/ci.yml)
+Write(.github/workflows/ci.yml)
+Edit(.github/CODEOWNERS)
+Write(.github/CODEOWNERS)
+Edit(.gitleaks.toml)
+Write(.gitleaks.toml)
+Edit(CLAUDE.md)
+Write(CLAUDE.md)'
 REQUIRED_DENY_RULES='Read(.env)
 Read(.env.*)
 Read(.dev.vars)

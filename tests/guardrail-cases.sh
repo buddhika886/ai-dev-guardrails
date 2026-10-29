@@ -403,9 +403,23 @@ reset_project
 echo "── nothing of the template survives bootstrap"
 # Asserted here as well as in install.sh, so the install cannot mark its own homework.
 for p in .template tests scripts/template-integrity.sh CONTRIBUTING.md CODE_OF_CONDUCT.md SECURITY.md \
-         .github/CODEOWNERS .github/ISSUE_TEMPLATE .claude/commands/bootstrap.md; do
+         .github/ISSUE_TEMPLATE .claude/commands/bootstrap.md; do
   if [ -e "$p" ]; then t_fail "template file survived: $p"; else t_pass "gone: $p"; fi
 done
+if grep -q '^/scripts/ci-guardrails.sh ' .github/CODEOWNERS && ! grep -q '/\.template/' .github/CODEOWNERS \
+   && ! grep -q '{{' .github/CODEOWNERS; then
+  t_pass ".github/CODEOWNERS is the project's own and names the enforcement files"
+else
+  t_fail ".github/CODEOWNERS is missing, unfilled or the template's" "$(cat .github/CODEOWNERS 2>/dev/null)"
+fi
+# SC2016: the workflow text is matched literally, ${GITHUB_BASE_REF} included.
+# shellcheck disable=SC2016
+if grep -qF 'git show "origin/${GITHUB_BASE_REF}:scripts/ci-guardrails.sh"' .github/workflows/ci.yml \
+   && ! grep -qF 'npm run guardrails' .github/workflows/ci.yml; then
+  t_pass "CI judges a pull request with the base branch's copy of the checks"
+else
+  t_fail "CI runs the pull request's own copy of the checks" "$(grep -n guardrails .github/workflows/ci.yml)"
+fi
 if head -1 README.md | grep -qxF "# $(node -p 'require("./package.json").name')"; then
   t_pass "README.md is the project's own, titled with the project name"
 else

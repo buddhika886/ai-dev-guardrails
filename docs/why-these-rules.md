@@ -371,7 +371,10 @@ Claude Code enforces them whatever model is behind it.
 so nothing merges until they pass and someone has reviewed it.
 
 **Why.** Local checks can be skipped (`git commit --no-verify`) or missing (a fresh clone). CI cannot
-be skipped by anyone working on a pull request, so it is where the rules are actually enforced.
+be skipped by anyone working on a pull request, so it is where the rules are actually enforced. Two
+details stop a pull request from marking its own homework: CI runs the checks from the main branch's
+copy of the script, not the pull request's, and `.github/CODEOWNERS` means a change to any guardrail
+file needs an owner's approval before it can merge.
 
 **Common practice.** Protected branches with required checks and review are standard practice for any
 shared codebase.

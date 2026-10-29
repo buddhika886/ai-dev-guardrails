@@ -167,6 +167,19 @@ guard block "an upper-case environment override"          'NPM_CONFIG_REGISTRY=h
 guard allow "git log --before is not npm"                 'git log --before=2026-01-01 --oneline'
 guard allow "npm config get is read-only"                 'npm config get min-release-age'
 
+echo "── rewriting a guardrail file from the shell must ASK"
+guard ask   "sed -i on the bash guard"                   'sed -i "s/exit 2/exit 0/" scripts/claude-bash-guard.sh'
+guard ask   "a redirect over the checks"                 'echo "" > scripts/ci-guardrails.sh'
+guard ask   "rm on the hooks config"                     'rm lefthook.yml'
+guard ask   "cp over the CI workflow"                    'cp /tmp/ci.yml .github/workflows/ci.yml'
+guard ask   "tee into CLAUDE.md"                         'tee CLAUDE.md < /tmp/rules.md'
+guard ask   "appending to .npmrc"                        'printf "allow-git=all\n" >> .npmrc'
+guard allow "reading the checks is fine"                 'cat scripts/ci-guardrails.sh'
+guard allow "running the checks is fine"                 'bash scripts/ci-guardrails.sh'
+guard allow "diffing a guardrail file is fine"           'git diff scripts/ci-guardrails.sh'
+guard allow "sed without -i on a guardrail file is fine" 'sed -n 1,20p scripts/ci-guardrails.sh'
+guard allow "cp between ordinary files is fine"          'cp src/a.ts src/b.ts'
+
 echo "── the ask decision must be well-formed"
 payload=$(node -e 'process.stdout.write(JSON.stringify({tool_name:"Bash",tool_input:{command:"git push origin main"}}))')
 out=$(printf '%s' "$payload" | bash scripts/claude-bash-guard.sh 2>/dev/null)

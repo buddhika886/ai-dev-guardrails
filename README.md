@@ -24,7 +24,7 @@ what makes it useful, and what makes it risky. These are the problems this kit i
 | "Ask me first" quietly stops working | You tell the AI to always ask before pushing, then click "don't ask again" a few times. Weeks later it pushes without asking and nobody noticed. |
 | Accidental deploys | The AI runs a deploy while "just testing", and it goes to the live site. |
 | Secrets committed to git | An API key gets committed. Deleting it later doesn't help: it stays in the history. |
-| Confidential names in code | A client's real name ends up in a comment or commit message. |
+| Confidential names in code | A client's real name ends up in a comment, a test fixture or example text. |
 | Risky packages | The AI installs a package with a known vulnerability, a hijacked new release, or a plausible name that doesn't exist and that an attacker has registered. |
 | "Done" that isn't | Work is reported finished, but nobody actually ran the tests. |
 
@@ -76,7 +76,7 @@ through OpenRouter, AWS, Google or Azure, among others. See
 5. **It stops and asks before committing.** Nothing is committed or pushed without your say-so.
 6. **On GitHub? Do the one-time repository setup.** Some protections are repository settings that
    no file can switch on: Dependabot alerts and security updates, secret scanning with push
-   protection, branch protection for `main`, and a read-only CI token. Your project's new README
+   protection, branch protection for `main` with review from code owners, and a read-only CI token. Your project's new README
    lists each one under "One-time GitHub setup", with where to click.
 
 ### What you end up with
@@ -91,7 +91,8 @@ through OpenRouter, AWS, Google or Azure, among others. See
 | `.gitleaks.toml` | The secret scanner's rules |
 | `.npmrc` | The dependency policy: a 7-day wait on new releases, registry-only packages, approved install scripts |
 | `lefthook.yml` | Checks that run on your machine on commit and push |
-| `.github/workflows/ci.yml` | Checks that run on GitHub for every pull request |
+| `.github/workflows/ci.yml` | Checks that run on GitHub for every pull request, using the main branch's copy of the checks |
+| `.github/CODEOWNERS` | The people whose review every change to the guardrail files needs |
 | `docs/` | How it all works and how to change it |
 
 Everything that belonged to the template itself (this README, its tests, its contribution files)
@@ -136,13 +137,13 @@ without printing it (`[ -n "$API_SECRET" ] && echo set`), running tests, buildin
 | Block secret printing | Passwords landing in the chat | Command guard + `.claude/settings.json` |
 | 1. No secret files in git | `.env`, private keys, credential files committed | `SECRET_FILE_PATTERNS` |
 | 2. Only approved browser settings | Server secrets exposed to the browser | `PUBLIC_VAR_ALLOWLIST` |
-| 3. Safe database queries | SQL injection | `UNSAFE_SQL`, `SERVER_DIRS` |
+| 3. No raw-SQL escape hatches | The known string-built query routes (SQL injection) | `UNSAFE_SQL`, `SERVER_DIRS` |
 | 4. No sensitive browser storage | Tokens in localStorage or cookies | `STORAGE_PATTERNS` |
 | 5. Migrations only get added | Databases drifting apart | `MIGRATIONS_DIR` |
 | 6. No secrets in the built app | Keys shipped to users | `BUNDLE_DIR`, `BUNDLE_LEAK_PATTERNS` |
 | 7. Schema matches the saved copy | Database changes without a migration | `SCHEMA_DUMP_CMD` |
 | 8. Safety settings intact | "Ask me first" being quietly switched off | Built in |
-| 9. No client names | Confidential names in code or commits | `.guardrails/denylist.local` |
+| 9. No client names | Confidential names in tracked or staged files | `.guardrails/denylist.local` |
 | 10. Local checks installed | A fresh clone with no local checks | Built in |
 | 11. Honest records (governance) | "Done" with no proof attached | `docs/governance/` |
 | 12. Dependency policy holds | Brand-new releases, git or URL packages, unapproved install scripts, a tampered lockfile | `.npmrc`, `package-lock.json` |
@@ -255,7 +256,11 @@ No safety system is complete. The gaps:
   hidden in a file or page the AI reads) could steer it round the rules. The checks on GitHub and
   branch protection are what limit the damage in that case. The real protection for production is a rule: the AI prepares
   production commands, and a person runs them.
-- **It only watches the AI.** Commands you type in your own terminal aren't checked.
+- **It only watches the AI, and only from the root.** Commands you type in your own terminal aren't
+  checked, and a Claude Code session started inside a subfolder loads none of the project's hooks or
+  rules (Claude Code reads them from the folder you start in). Start at the repository root.
+- **Check 9 scans files, not commit messages or branch names.** On a public repository it also
+  reports SKIPPED on pull requests from forks, because GitHub does not hand secrets to them.
 - **A leaked secret can't be un-leaked.** If one reaches the chat history, change it.
 - **Check 11 checks structure, not quality.** A reviewer still decides whether the proof proves it.
 - **Dependency protection is set up for npm.** pnpm, yarn and bun have equivalent settings (see

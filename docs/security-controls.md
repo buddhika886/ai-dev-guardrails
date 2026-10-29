@@ -46,6 +46,7 @@ model is behind Claude Code. **Proven by:** `hook-cases`, `sparse-cases`.
 | `DEPLOY_PATTERNS` | Ask | Vercel, Netlify, Wrangler, Fly, Firebase, Railway, Heroku rollback, Serverless, EAS, Supabase `db push` and functions deploy, `prisma migrate deploy` and `db push`, `drizzle-kit push` and `migrate` |
 | `REMOTE_CONFIG_PATTERNS` | Ask | Setting or deleting secrets and config on GitHub, Wrangler, Vercel, Fly, Supabase, Heroku |
 | `DEPENDENCY_PATTERNS` | Ask | `npm install <name>`, `npm add`, `pnpm add`, `yarn add`, `bun add`, `bun install <name>`, `pnpm dlx`, `yarn dlx`, `bunx`, `npm approve-scripts` |
+| `ENFORCEMENT_WRITE` | Ask | A shell command that rewrites a guardrail file (`sed -i`, `perl -i`, a redirect, `tee`, `cp`, `mv`, `rm`, `truncate`, `chmod`, `install`, `ln` onto the guard, the checks, the Stop hook, `lefthook.yml`, the CI workflow, `CODEOWNERS`, `.gitleaks.toml`, `.claude/settings.json`, `CLAUDE.md` or `.npmrc`). Reading, running or diffing them is not asked about |
 | No payload | Block | The guard was called without a command to inspect (fails closed) |
 | Unreadable payload | Block or Ask | No JSON parser, or malformed input: the patterns are matched against the raw payload instead of trusting an empty command |
 | Long commands | Block or Ask | A match is never lost on a long, multi-line command (matching reads the whole command, never a pipe that can be cut short) |
@@ -66,6 +67,7 @@ ask, then allow, so a saved "allow" cannot override these. **Proven by:** `guard
 | `Bash(gh pr create *)`, `Bash(gh pr merge *)`, `Bash(gh release create *)` | Ask | Pull requests and releases |
 | `Bash(npm publish *)`, `Bash(pnpm publish *)`, `Bash(yarn publish *)`, `Bash(yarn npm publish *)`, `Bash(bun publish *)` | Ask | Publishing a package |
 | `Edit(.npmrc)`, `Write(.npmrc)` | Ask | The AI changing the dependency policy file |
+| `Edit(scripts/claude-bash-guard.sh)`, `Write(scripts/claude-bash-guard.sh)`, `Edit(scripts/ci-guardrails.sh)`, `Write(scripts/ci-guardrails.sh)`, `Edit(scripts/claude-stop-guardrails.sh)`, `Write(scripts/claude-stop-guardrails.sh)`, `Edit(lefthook.yml)`, `Write(lefthook.yml)`, `Edit(.github/workflows/ci.yml)`, `Write(.github/workflows/ci.yml)`, `Edit(.github/CODEOWNERS)`, `Write(.github/CODEOWNERS)`, `Edit(.gitleaks.toml)`, `Write(.gitleaks.toml)`, `Edit(CLAUDE.md)`, `Write(CLAUDE.md)` | Ask | The AI changing an enforcement file with its editing tools. A prompt-injected or over-eager agent would otherwise weaken the guard with one edit, and the guard script is read fresh on every command. The guard's `ENFORCEMENT_WRITE` (section 1) covers the same files from the shell; CODEOWNERS (section 5) covers them in pull requests |
 | `disableBypassPermissionsMode: "disable"` | Policy | A session cannot be started in bypass-permissions mode, which skips every prompt including the ask rules above and the guard's ask decisions. Check 8 fails without it |
 | `Read(.env)`, `Read(.env.*)`, `Read(.dev.vars)` (with `Read(!.env.example)`, `Read(!.env.sample)` allowed) | Block | Claude Code's file reader opening environment files |
 | `Read(*.pem)`, `Read(*.key)`, `Read(*.p12)`, `Read(*.pfx)` | Block | Opening private keys and certificates |
@@ -123,7 +125,8 @@ CI runs actionlint on it. The scan steps' behaviour was verified against real pr
 | --- | --- | --- |
 | `permissions: contents: read` | Policy | The workflow token can read the repository and nothing else |
 | Actions pinned to commit SHAs | Policy | A moved or hijacked version tag cannot change what runs |
-| `verify` job | Check | `npm ci` (fails on lockfile drift), `npm audit signatures`, typecheck, lint, build, all guardrail checks with the `GUARDRAILS_DENYLIST` secret |
+| `verify` job | Check | `npm ci` (fails on lockfile drift), `npm audit signatures`, typecheck, lint, build, all guardrail checks with the `GUARDRAILS_DENYLIST` secret. On a pull request the checks run from the **base branch's** copy of `scripts/ci-guardrails.sh`, so a change that weakens a check cannot grade itself |
+| `.github/CODEOWNERS` | Policy | Names the guardrail owners for every enforcement file (guard, checks, Stop hook, settings, `lefthook.yml`, `.github/`, `.gitleaks.toml`, `.npmrc`, `CLAUDE.md`). With the ruleset's "require review from Code Owners" (section 11), a pull request that touches them needs an owner's approval |
 | `dependencies` job | Scan | OSV-Scanner, checksum-pinned, on `package-lock.json`; fails on any known vulnerability or a missing lockfile; skips, and says so, with no dependencies yet |
 | `secrets` job | Scan | gitleaks, checksum-pinned, over the full git history |
 
@@ -219,7 +222,7 @@ they describe is not there.
 | Dependabot alerts | Manual setting | Warnings when a dependency has a known vulnerability |
 | Dependabot security updates | Manual setting | Automatic pull requests that fix those vulnerabilities |
 | Secret scanning with push protection | Manual setting | GitHub rejects a push that contains a recognised secret |
-| Ruleset on `main` | Manual setting | Pull request with at least one approval; `verify`, `dependencies` and `secrets` must pass; no force-push. Without it, CI reports but does not block |
+| Ruleset on `main` | Manual setting | Pull request with at least one approval and review from Code Owners; `verify`, `dependencies` and `secrets` must pass; no force-push. Without it, CI reports but does not block, and CODEOWNERS is advisory |
 | Read-only workflow token | Manual setting | The default token for every workflow can only read |
 | `GUARDRAILS_DENYLIST` secret | Manual setting | Lets CI enforce check 9 (client work only) |
 
@@ -273,5 +276,6 @@ These protect the template itself and its contributors. They are removed from a 
 | Secret scan with no directory-wide allowlist | Scan | gitleaks over the full history, plus tests that the config still catches real keys |
 | Sign-off (DCO) | Check | Every commit in a pull request must be signed off |
 | Code owners and review | Policy | Changes reach `main` only through a reviewed pull request |
+| The repo's own `.claude/settings.json` | Policy | Maintainer sessions get the bash guard (unfilled tokens treated as empty patterns), ask rules for commits, pushes, pull requests and edits under `.template/core/`, and bypass mode disabled |
 | Private vulnerability reporting | Policy | Ways around a guardrail are reported privately (`SECURITY.md`) |
 | House rules | Written rule | Every enforcement change needs a test that fails without it; never weaken a check to make it pass |

@@ -68,7 +68,10 @@ every lockfile entry comes from the registry with a sha512 hash.
 
 ## 4. CI
 
-GitHub Actions is the authority. It re-runs everything on a clean checkout, so nothing merges on a
+GitHub Actions is the authority. On a pull request it runs the guardrails from the base branch's
+copy of the script, so a change that weakens a check is still judged by the old one; the new checks
+take over once the change is reviewed and merged. `.github/CODEOWNERS` names the owners whose review
+every change to an enforcement file needs. It re-runs everything on a clean checkout, so nothing merges on a
 "works on my machine". Three jobs: `verify` (typecheck, lint, build, registry signatures,
 guardrails, schema-truth), `dependencies` (a checksum-pinned OSV-Scanner binary checking the
 lockfile for known vulnerabilities) and `secrets` (a checksum-pinned gitleaks binary scanning full

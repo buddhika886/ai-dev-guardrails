@@ -1,0 +1,13 @@
+# Changes to the guardrails need an owner's review. With a ruleset on main that requires review from
+# code owners, these lines make the enforcement files change-controlled: a pull request can edit
+# them, but it merges only when an owner has approved. CI judges every pull request with the base
+# branch's copy of the checks, so a change here cannot grade itself.
+/scripts/claude-bash-guard.sh {{CODEOWNERS}}
+/scripts/ci-guardrails.sh {{CODEOWNERS}}
+/scripts/claude-stop-guardrails.sh {{CODEOWNERS}}
+/.claude/settings.json {{CODEOWNERS}}
+/lefthook.yml {{CODEOWNERS}}
+/.github/ {{CODEOWNERS}}
+/.gitleaks.toml {{CODEOWNERS}}
+/.npmrc {{CODEOWNERS}}
+/CLAUDE.md {{CODEOWNERS}}

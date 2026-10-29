@@ -70,6 +70,7 @@ cp "$T/core/ci/verify.yml"     .github/workflows/ci.yml
 cp "$T"/core/scripts/*.sh      scripts/
 cp "$T/core/settings.json"     .claude/settings.json
 cp "$T/core/dependabot.yml"    .github/dependabot.yml
+cp "$T/core/CODEOWNERS"        .github/CODEOWNERS
 cp "$T/core/CLAUDE.project.md" CLAUDE.md.pending   # held back for Step 5
 cp "$T/core/README.project.md" README.md.pending   # held back for Step 5
 ensure_ignored '.guardrails/*.local'
@@ -120,6 +121,7 @@ done
 node "$ROOT/tests/lib/fill.mjs" "$VALUES" \
   lefthook.yml \
   .github/workflows/ci.yml \
+  .github/CODEOWNERS \
   scripts/ci-guardrails.sh \
   scripts/claude-bash-guard.sh \
   scripts/claude-stop-guardrails.sh \
@@ -249,10 +251,11 @@ rmdir .claude/commands 2>/dev/null || true
 # Step 5.5: nothing of the template may be left.
 left=''
 for p in .template tests scripts/template-integrity.sh CONTRIBUTING.md CODE_OF_CONDUCT.md SECURITY.md \
-         .github/CODEOWNERS .github/ISSUE_TEMPLATE .claude/commands/bootstrap.md; do
+         .github/ISSUE_TEMPLATE .claude/commands/bootstrap.md; do
   [ -e "$p" ] && left="$left $p"
 done
 head -1 README.md | grep -qxF '# ai-dev-guardrails' && left="$left README.md(template's)"
+{ ! grep -q '^/scripts/ci-guardrails.sh ' .github/CODEOWNERS || grep -q '/\.template/' .github/CODEOWNERS; } && left="$left .github/CODEOWNERS(template's)"
 grep -qxE 'DEVLOG.md|PROJECT-GUIDE.md' .gitignore && left="$left .gitignore(template entries)"
 if [ -n "$left" ]; then echo "  ✗ template files survived the install:$left"; exit 1; fi
 echo "  ✓ nothing of the template is left (its README, tests, community files and bootstrap command are gone)"

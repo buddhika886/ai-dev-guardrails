@@ -70,6 +70,13 @@ version pinned in `.github/workflows/ci.yml` if you want your local scan to matc
 A tool you have not installed prints `SKIPPED` instead of blocking your commit, because CI re-runs
 everything on a clean machine.
 
+If you work on this repo with Claude Code, the repo's own `.claude/settings.json` applies the same
+discipline to you that generated projects get: the bash guard runs on every command (unfilled
+tokens are treated as empty patterns), commits, pushes and pull requests ask every time, editing
+anything under `.template/core/`, the bootstrap command, the CI workflow or the secret-scanner
+config asks, and bypass-permissions mode is disabled. Start the session at the repository root, or
+none of it loads.
+
 ## Running the checks
 
 ```bash
@@ -87,6 +94,7 @@ CI runs the same, plus a full-history secret scan and the sign-off check.
 | --- | --- |
 | `.claude/commands/bootstrap.md` | The `/bootstrap` command: the install steps and the token table |
 | `.template/core/` | Everything copied into every generated project |
+| `.claude/settings.json` | This repo's own Claude Code guardrails (the generated ones are in `.template/core/settings.json`) |
 | `.template/governance/` | The governance tier |
 | `.template/lang/ts/` | The TypeScript language fragment |
 | `.template/security/`, `.template/agents/` | Placeholders for tiers not built yet |

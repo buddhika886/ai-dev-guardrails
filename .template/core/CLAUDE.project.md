@@ -30,6 +30,13 @@ is a backstop that blocks obvious prod-targeting commands and force-pushes, but 
 production reached through environment-variable indirection, so do not rely on it: follow the
 process.
 
+## Start sessions at the repository root
+
+Claude Code loads this project's hooks and permission rules from `.claude/settings.json` in the
+directory a session starts in, with no fallback to a parent directory. A session started in a
+subdirectory (`cd apps/web && claude`) has this file but none of the guardrails below. Start every
+session at the repository root and change directory from there; the hooks follow you.
+
 ## Local-first
 
 Create no cloud resources until explicitly told. Everything runs locally via {{LOCAL_TOOLCHAIN}}.

@@ -40,6 +40,12 @@ PROD_ENV_VAR_NAMES='{{PROD_ENV_VAR_NAMES}}'
 # Server secret env-var NAMES. Echoing or printenv-ing one of these prints the secret into the
 # session transcript, so it is blocked.
 SECRET_VAR_NAMES='{{SECRET_VAR_NAMES}}'
+# An unfilled token is not a pattern. The template repository runs this guard on itself before
+# bootstrap has filled anything; a literal {{...}} fed to grep -E would be a broken regex on BSD grep
+# and a meaningless one on GNU grep, so it is treated as empty instead.
+for v in PROD_GUARD_PATTERNS PROD_ENV_VAR_NAMES SECRET_VAR_NAMES; do
+  case "${!v}" in '{{'*'}}') printf -v "$v" '%s' '' ;; esac
+done
 # --------------------------------------
 
 # ---- BUILT-IN: not filled by bootstrap. Extend these lists for your stack; do not shorten them. ----
@@ -93,6 +99,14 @@ DEPENDENCY_PATTERNS+="|${B}(pnpm|yarn|bun)[[:space:]]+add([[:space:]]|$)"
 DEPENDENCY_PATTERNS+="|${B}bun[[:space:]]+(install|i)${PKG_FLAGS}[[:space:]]+[^-[:space:]|;&]"
 DEPENDENCY_PATTERNS+="|${B}(pnpm|yarn)[[:space:]]+dlx([[:space:]]|$)|${B}bunx([[:space:]]|$)"
 DEPENDENCY_PATTERNS+="|${B}npm[[:space:]]+approve-scripts"
+
+# Rewriting an enforcement file from the shell. The Edit and Write ask rules in .claude/settings.json
+# cover the editing tools; this covers sed -i, redirects, tee, cp, mv, rm and the like on the same
+# files. Asked, not blocked: maintaining the guardrails is legitimate work, but it is never work the
+# agent does on its own say-so.
+ENFORCEMENT_FILES='(scripts/(claude-bash-guard|ci-guardrails|claude-stop-guardrails)\.sh|lefthook\.yml|\.github/workflows/ci\.yml|\.github/CODEOWNERS|\.gitleaks\.toml|\.claude/settings\.json|CLAUDE\.md|\.npmrc)'
+ENFORCEMENT_WRITE="${B}(sed[^|;&]*[[:space:]]-[a-zA-Z]*i|perl[^|;&]*[[:space:]]-[a-zA-Z]*i|tee|cp|mv|rm|truncate|chmod|install|ln)[[:space:]][^|;&]*${ENFORCEMENT_FILES}([[:space:]\"'|;&)]|$)"
+ENFORCEMENT_WRITE+="|>>?[[:space:]]*[\"']?${ENFORCEMENT_FILES}([[:space:]\"'|;&)]|$)"
 
 # Switching off the dependency policy in .npmrc for one command. Every key here would let a
 # brand-new, unreviewed or non-registry package in. Changing the policy is a reviewed edit to .npmrc,
@@ -228,6 +242,9 @@ if grep -qiE "$REMOTE_CONFIG_PATTERNS" <<<"$cmd"; then
 fi
 if grep -qiE "$DEPENDENCY_PATTERNS" <<<"$cmd"; then
   ask "Consent required: this adds a dependency or approves install scripts. Check the package name is the one you meant (assistants invent plausible names), that it is maintained, and that the project needs it."
+fi
+if grep -qE "$ENFORCEMENT_WRITE" <<<"$cmd"; then
+  ask "Consent required: this rewrites a guardrail file (the command guard, the checks, the hooks, CI, CODEOWNERS, the secret-scanner config, CLAUDE.md or .npmrc). Changing the rules is a reviewed decision, never a side effect of a task; never weaken a check to make it pass."
 fi
 
 exit 0
