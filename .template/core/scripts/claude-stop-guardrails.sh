@@ -4,6 +4,12 @@
 # failing check (the first ✗ line) so the fix is obvious without re-running by hand.
 set -uo pipefail
 
+# Hooks run in the agent's current directory, which follows its `cd`. Resolve the project root
+# first so the guardrails are found from a subdirectory too. If neither the hook variable nor git
+# can name the root, the guardrails fail (ci-guardrails.sh fails closed on a bad root) and the
+# warning below says so, rather than this hook going quiet.
+cd "${CLAUDE_PROJECT_DIR:-$(git rev-parse --show-toplevel 2>/dev/null || echo .)}" || exit 0
+
 if out=$(GUARDRAILS_FAST=1 bash scripts/ci-guardrails.sh 2>&1); then
   exit 0
 fi

@@ -33,11 +33,17 @@ running the same command via the input-box `!` prefix is unaffected):
   It fails closed on its own failure modes: an absent hook payload blocks, and an unparseable one (or
   a machine with no JSON parser on `PATH`) is pattern-matched raw rather than waved through, because
   a guard that goes quiet when a dependency is missing is worse than no guard.
-- **Permission rules** back the guard up. `permissions.ask` covers the core consent commands and
-  `permissions.deny` stops the Read tool opening secret files. Claude Code evaluates deny, then ask,
+  The hook is wired in exec form through `${CLAUDE_PROJECT_DIR}`, because Claude Code runs hooks in
+  the agent's current directory and a relative path stops resolving after `cd apps/web`; and with
+  `onFailure: block`, because Claude Code otherwise treats a hook that cannot start as a non-blocking
+  error and runs the command. Both are asserted by check [8].
+- **Permission rules** back the guard up. `permissions.ask` covers the core consent commands,
+  `permissions.deny` stops the Read tool opening secret files, and `disableBypassPermissionsMode`
+  keeps a session out of the one mode that skips every prompt. Claude Code evaluates deny, then ask,
   then allow, so an allowlist wildcard saved in `settings.local.json` cannot silence them. Guardrail
-  check [8] fails if the rules are removed or if an allow rule pre-approves a consent command, which
-  is how a written consent rule quietly turns back into prose.
+  check [8] parses the settings and fails if any hook or rule is removed or weakened, if either
+  settings file disables hooks or defaults to bypass mode, or if an allow rule pre-approves a
+  consent command, which is how a written consent rule quietly turns back into prose.
 - **Stop** (`claude-stop-guardrails.sh`) runs the fast guardrails when a turn ends and warns, naming
   the first failing check, so a violation is noticed before anything is committed.
 
@@ -62,7 +68,10 @@ every lockfile entry comes from the registry with a sha512 hash.
 
 ## 4. CI
 
-GitHub Actions is the authority. It re-runs everything on a clean checkout, so nothing merges on a
+GitHub Actions is the authority. On a pull request it runs the guardrails from the base branch's
+copy of the script, so a change that weakens a check is still judged by the old one; the new checks
+take over once the change is reviewed and merged. `.github/CODEOWNERS` names the owners whose review
+every change to an enforcement file needs. It re-runs everything on a clean checkout, so nothing merges on a
 "works on my machine". Three jobs: `verify` (typecheck, lint, build, registry signatures,
 guardrails, schema-truth), `dependencies` (a checksum-pinned OSV-Scanner binary checking the
 lockfile for known vulnerabilities) and `secrets` (a checksum-pinned gitleaks binary scanning full
@@ -106,3 +115,18 @@ fails on Done without evidence, so the records cannot drift into claims.
 Fail closed (an error in a check counts as a failure), least privilege, generic errors to clients,
 never log secrets or request bodies, and human consent gates for anything outward-facing or
 irreversible.
+
+## Words used in these docs
+
+| Term | Plain meaning |
+| --- | --- |
+| Bootstrap | The one-time setup that turns the kit into your project |
+| Hook | A small script that runs automatically at a set moment (before a command, before a commit) |
+| Guardrails | The automatic checks |
+| CI | The checks GitHub runs on every pull request |
+| Lefthook | The tool that runs checks on your machine when you commit or push |
+| gitleaks | The tool that scans for passwords and API keys |
+| Transcript | The stored chat history between you and the AI |
+| Denylist | Your private list of words that must never be committed |
+| Fail closed | If a check breaks, treat it as a failure, not a pass |
+| Regex / pattern | A short text pattern; `a\|b` means "a or b", `\.` means a real dot |

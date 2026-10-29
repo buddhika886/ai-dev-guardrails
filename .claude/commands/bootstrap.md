@@ -60,7 +60,10 @@ installing. Also confirm the **project name** (default: this directory's name) a
      and records the choice; the tier files arrive in a later release.
 
 Also capture the **source-of-truth documents** the project's CLAUDE.md should point at (PRD, runbook,
-spec), the **language/spelling** convention (default: British English), and the **licence**:
+spec), the **language/spelling** convention (default: British English), the **guardrail owners**
+(the GitHub handle or team, such as `@octocat` or `@acme/platform`, whose review every change to the
+enforcement files needs; default: the user's own handle; written into `.github/CODEOWNERS`), and the
+**licence**:
 
 - **No licence file** (recommended for client and internal work): the code stays all rights
   reserved, which is the right default for anything not being open-sourced.
@@ -95,6 +98,8 @@ Do these in order. Show the user what you are doing at each step.
    - `.template/core/scripts/*.sh` → `scripts/`
    - `.template/core/settings.json` → `.claude/settings.json`
    - `.template/core/dependabot.yml` → `.github/dependabot.yml`
+   - `.template/core/CODEOWNERS` → `.github/CODEOWNERS` (the project's own, naming the enforcement
+     files; the template's was removed in step 0)
    - `.template/core/README.project.md` → hold for Step 5 (do not place yet).
    - Make sure `.gitignore` contains `.guardrails/*.local`, `.claude/settings.local.json`,
      `.claude/profiles/*.settings.json` and `.claude/openrouter.settings.json` (append any that are
@@ -184,6 +189,7 @@ that fills it. Empty-allowed tokens are marked.
 | `{{PROD_GUARD_PATTERNS}}` | Q4 (host/verb patterns for the bash guard)                               | yes ("none yet") |
 | `{{PROD_ENV_VAR_NAMES}}`  | Q4 (prod-bearing env-var names)                                          | yes ("none yet") |
 | `{{GOVERNANCE_ENABLED}}`  | Q5 (tier): `on` if governance is selected, otherwise `off`               | no            |
+| `{{CODEOWNERS}}`          | Step 3 guardrail owners (GitHub handle or team, for `.github/CODEOWNERS`) | no            |
 | `{{BOOTSTRAP_DATE}}`      | Today's date, ISO (YYYY-MM-DD), for the governance records               | no            |
 | `{{IF_SECURITY_TIER}}`    | Q3 (data) and/or Q5 (tier): line kept if on, dropped if off              | line marker   |
 | `{{IF_GOVERNANCE_TIER}}`  | Q5 (tier): line kept if on, dropped if off                               | line marker   |
@@ -204,17 +210,18 @@ empty. Prod safety by process still applies.
 4. Delete `.template/` and `.claude/commands/bootstrap.md` (this command; it has done its job).
 5. **Check nothing of the template is left.** None of these may exist: `.template/`, `tests/`,
    `scripts/template-integrity.sh`, `CONTRIBUTING.md`, `CODE_OF_CONDUCT.md`, `SECURITY.md`,
-   `.github/CODEOWNERS`, `.github/ISSUE_TEMPLATE/`, `.claude/commands/bootstrap.md`; and
-   `README.md` must not be the template's own (first line exactly `# ai-dev-guardrails`). If any check fails, STOP and
-   report it.
+   `.github/ISSUE_TEMPLATE/`, `.claude/commands/bootstrap.md`; `README.md` must not be the
+   template's own (first line exactly `# ai-dev-guardrails`); and `.github/CODEOWNERS` must be the
+   project's own (it names `/scripts/ci-guardrails.sh` and never `/.template/`). If any check fails,
+   STOP and report it.
 6. `git add -A`.
 7. **STOP and ask for consent to commit.** Show the user exactly what would be committed (the file
    list). Never commit or push without a fresh, explicit go-ahead. This holds even here. Do not run
    `git commit` until they say yes.
 8. **Tell the user about the one-time GitHub setup.** If the project is on GitHub, point the user to
    the "One-time GitHub setup" section of the new `README.md`: Dependabot alerts and security
-   updates, secret scanning with push protection, a ruleset protecting `main`, and a read-only CI
-   token. These are repository settings, so bootstrap cannot switch them on.
+   updates, secret scanning with push protection, a ruleset protecting `main` that requires review
+   from code owners, and a read-only CI token. These are repository settings, so bootstrap cannot switch them on.
 9. **Tell the user about the client denylist.** If the project is for a client, the user should
    create `.guardrails/denylist.local` themselves, one extended regex per line for each identifier
    that must never be committed (the client's legal name, for example), and set the same lines as

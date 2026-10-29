@@ -98,7 +98,7 @@ guard allow "a prod-shaped command is NOT caught (no patterns configured)" 'psql
 echo "── nothing of the template survives bootstrap"
 # Asserted here as well as in install.sh, so the install cannot mark its own homework.
 for p in .template tests scripts/template-integrity.sh CONTRIBUTING.md CODE_OF_CONDUCT.md SECURITY.md \
-         .github/CODEOWNERS .github/ISSUE_TEMPLATE .claude/commands/bootstrap.md; do
+         .github/ISSUE_TEMPLATE .claude/commands/bootstrap.md; do
   if [ -e "$p" ]; then t_fail "template file survived: $p"; else t_pass "gone: $p"; fi
 done
 if head -1 README.md | grep -qxF "# $(node -p 'require("./package.json").name')"; then

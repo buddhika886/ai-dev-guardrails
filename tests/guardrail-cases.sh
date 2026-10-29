@@ -137,6 +137,33 @@ portable_sed '/"Bash(git push \*)",/d' .claude/settings.json
 expect_reject "removing a required ask rule is caught" "consent rule removed"
 portable_sed 's|claude-bash-guard.sh|true|' .claude/settings.json
 expect_reject "unwiring the bash guard is caught" "claude-bash-guard.sh is not wired"
+portable_sed 's|claude-stop-guardrails.sh|true|' .claude/settings.json
+expect_reject "unwiring the Stop hook is caught" "claude-stop-guardrails.sh is not wired"
+# A relative path is found only while the agent sits at the project root; after `cd apps/web` the
+# hook cannot start, and Claude Code treats a hook that cannot start as non-blocking.
+# SC2016: ${CLAUDE_PROJECT_DIR} is literal on purpose; Claude Code expands it when it runs the hook.
+# shellcheck disable=SC2016
+portable_sed 's|${CLAUDE_PROJECT_DIR}/scripts/claude-bash-guard.sh|scripts/claude-bash-guard.sh|' .claude/settings.json
+expect_reject "a relative hook path is caught" "claude-bash-guard.sh is not wired"
+node -e 'const f=".claude/settings.json",fs=require("fs");const j=JSON.parse(fs.readFileSync(f,"utf8"));delete j.hooks.PreToolUse[0].hooks[0].onFailure;fs.writeFileSync(f,JSON.stringify(j,null,2))'
+expect_reject "dropping onFailure: block is caught" 'must set "onFailure": "block"'
+# Shell form (no args array) re-parses the path through a shell; the check requires exec form.
+# SC2016: ${CLAUDE_PROJECT_DIR} is literal on purpose; Claude Code expands it when it runs the hook.
+# shellcheck disable=SC2016
+node -e 'const f=".claude/settings.json",fs=require("fs");const j=JSON.parse(fs.readFileSync(f,"utf8"));const h=j.hooks.PreToolUse[0].hooks[0];h.command="bash ${CLAUDE_PROJECT_DIR}/scripts/claude-bash-guard.sh";delete h.args;fs.writeFileSync(f,JSON.stringify(j,null,2))'
+expect_reject "a shell-form hook command is caught" "claude-bash-guard.sh is not wired"
+portable_sed '/"disableBypassPermissionsMode": "disable",/d' .claude/settings.json
+expect_reject "removing the bypass-mode lock is caught" "disableBypassPermissionsMode must be"
+portable_sed '/"Read(.env)",/d' .claude/settings.json
+expect_reject "removing a Read deny rule is caught" "deny rule removed from .claude/settings.json: Read(.env)"
+portable_sed '/"Bash(gh pr create \*)",/d' .claude/settings.json
+expect_reject "removing a non-sample ask rule is caught" "consent rule removed from .claude/settings.json: Bash(gh pr create *)"
+mkdir -p .claude; printf '{"disableAllHooks": true}\n' > .claude/settings.local.json
+expect_reject "disableAllHooks in the local file is caught" "disableAllHooks is true"; clean_local
+mkdir -p .claude; printf '{"permissions":{"defaultMode":"bypassPermissions"}}\n' > .claude/settings.local.json
+expect_reject "bypassPermissions as the local default mode is caught" "defaultMode is bypassPermissions"; clean_local
+local_allow '["Bash(git push:*)"]'
+expect_reject "the legacy :* prefix form is caught as creep" "permission creep"; clean_local
 rm -f .claude/settings.json
 expect_reject "a missing settings file is caught" ".claude/settings.json is missing"
 local_allow '["Bash(npm test)", "Bash(git push *)"]'
@@ -376,9 +403,23 @@ reset_project
 echo "── nothing of the template survives bootstrap"
 # Asserted here as well as in install.sh, so the install cannot mark its own homework.
 for p in .template tests scripts/template-integrity.sh CONTRIBUTING.md CODE_OF_CONDUCT.md SECURITY.md \
-         .github/CODEOWNERS .github/ISSUE_TEMPLATE .claude/commands/bootstrap.md; do
+         .github/ISSUE_TEMPLATE .claude/commands/bootstrap.md; do
   if [ -e "$p" ]; then t_fail "template file survived: $p"; else t_pass "gone: $p"; fi
 done
+if grep -q '^/scripts/ci-guardrails.sh ' .github/CODEOWNERS && ! grep -q '/\.template/' .github/CODEOWNERS \
+   && ! grep -q '{{' .github/CODEOWNERS; then
+  t_pass ".github/CODEOWNERS is the project's own and names the enforcement files"
+else
+  t_fail ".github/CODEOWNERS is missing, unfilled or the template's" "$(cat .github/CODEOWNERS 2>/dev/null)"
+fi
+# SC2016: the workflow text is matched literally, ${GITHUB_BASE_REF} included.
+# shellcheck disable=SC2016
+if grep -qF 'git show "origin/${GITHUB_BASE_REF}:scripts/ci-guardrails.sh"' .github/workflows/ci.yml \
+   && ! grep -qF 'npm run guardrails' .github/workflows/ci.yml; then
+  t_pass "CI judges a pull request with the base branch's copy of the checks"
+else
+  t_fail "CI runs the pull request's own copy of the checks" "$(grep -n guardrails .github/workflows/ci.yml)"
+fi
 if head -1 README.md | grep -qxF "# $(node -p 'require("./package.json").name')"; then
   t_pass "README.md is the project's own, titled with the project name"
 else

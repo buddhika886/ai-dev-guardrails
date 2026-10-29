@@ -55,7 +55,20 @@ jobs:
           # while it is unset. GitHub masks secret values in logs, and the check prints only
           # path:line, never the match.
           GUARDRAILS_DENYLIST: ${{ secrets.GUARDRAILS_DENYLIST }}
-        run: npm run guardrails
+        # A pull request is judged by the BASE branch's copy of the checks, so a change that weakens
+        # a check cannot grade itself; the new checks take over once the change is reviewed and
+        # merged. A push to main (no base) runs the committed copy. The workflow file itself can
+        # still be changed by a pull request, which is why CODEOWNERS covers .github/ and the
+        # ruleset requires an owner's review.
+        run: |
+          if [ -n "${GITHUB_BASE_REF:-}" ]; then
+            git show "origin/${GITHUB_BASE_REF}:scripts/ci-guardrails.sh" > "${RUNNER_TEMP}/ci-guardrails.sh" \
+              || { echo "could not read scripts/ci-guardrails.sh from origin/${GITHUB_BASE_REF} (failing closed)"; exit 1; }
+            echo "Running the guardrails from origin/${GITHUB_BASE_REF}"
+            bash "${RUNNER_TEMP}/ci-guardrails.sh"
+          else
+            bash scripts/ci-guardrails.sh
+          fi
 
   dependencies:
     # Known vulnerabilities in package-lock.json, from the OSV database (GitHub, npm and other

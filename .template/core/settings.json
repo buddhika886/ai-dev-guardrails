@@ -1,5 +1,6 @@
 {
   "permissions": {
+    "disableBypassPermissionsMode": "disable",
     "ask": [
       "Bash(git commit *)",
       "Bash(git push *)",
@@ -12,7 +13,23 @@
       "Bash(yarn npm publish *)",
       "Bash(bun publish *)",
       "Edit(.npmrc)",
-      "Write(.npmrc)"
+      "Write(.npmrc)",
+      "Edit(scripts/claude-bash-guard.sh)",
+      "Write(scripts/claude-bash-guard.sh)",
+      "Edit(scripts/ci-guardrails.sh)",
+      "Write(scripts/ci-guardrails.sh)",
+      "Edit(scripts/claude-stop-guardrails.sh)",
+      "Write(scripts/claude-stop-guardrails.sh)",
+      "Edit(lefthook.yml)",
+      "Write(lefthook.yml)",
+      "Edit(.github/workflows/ci.yml)",
+      "Write(.github/workflows/ci.yml)",
+      "Edit(.github/CODEOWNERS)",
+      "Write(.github/CODEOWNERS)",
+      "Edit(.gitleaks.toml)",
+      "Write(.gitleaks.toml)",
+      "Edit(CLAUDE.md)",
+      "Write(CLAUDE.md)"
     ],
     "deny": [
       "Read(.env)",
@@ -38,14 +55,23 @@
       {
         "matcher": "Bash",
         "hooks": [
-          { "type": "command", "command": "bash scripts/claude-bash-guard.sh" }
+          {
+            "type": "command",
+            "command": "bash",
+            "args": ["${CLAUDE_PROJECT_DIR}/scripts/claude-bash-guard.sh"],
+            "onFailure": "block"
+          }
         ]
       }
     ],
     "Stop": [
       {
         "hooks": [
-          { "type": "command", "command": "bash scripts/claude-stop-guardrails.sh" }
+          {
+            "type": "command",
+            "command": "bash",
+            "args": ["${CLAUDE_PROJECT_DIR}/scripts/claude-stop-guardrails.sh"]
+          }
         ]
       }
     ]

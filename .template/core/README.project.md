@@ -32,8 +32,9 @@ settings, so no file in the repo can turn them on for you:
 2. **Secret scanning.** On the same page, enable **Secret scanning** and **Push protection**, so
    GitHub also rejects a pushed secret.
 3. **Protect `main`.** In **Settings → Rules → Rulesets**, add a branch ruleset for `main`: require
-   a pull request with at least one approval, require the `verify`, `dependencies` and `secrets`
-   checks to pass, and block force pushes.
+   a pull request with at least one approval **and review from Code Owners** (so a change to the
+   guardrail files listed in `.github/CODEOWNERS` needs an owner's approval), require the `verify`,
+   `dependencies` and `secrets` checks to pass, and block force pushes.
 4. **Read-only CI token.** In **Settings → Actions → General → Workflow permissions**, choose
    **Read repository contents**.
 5. **Client denylist** (client work only). In **Settings → Secrets and variables → Actions**, add a
@@ -48,9 +49,14 @@ gh api -X PUT repos/OWNER/REPO/automated-security-fixes    # Dependabot security
 
 ### What to expect when working with Claude Code
 
+- **Start Claude Code at the repository root.** The hooks and permission rules live in
+  `.claude/settings.json` here, and Claude Code does not look in parent directories for them: a
+  session started inside a subfolder has none of the protections below.
+
 - **It asks before anything leaves your machine:** commits, pushes, pull requests, publishes,
   deploys, remote migrations, remote secret and config changes. Every time, even if someone clicked
-  "don't ask again" earlier.
+  "don't ask again" earlier. (Bypass-permissions mode would skip the prompt; the project settings
+  switch it off.)
 - **It asks before adding a package** (`npm install <name>`, `pnpm add`, `yarn add`), because a
   package name an assistant suggests may not be the one you meant.
 - **It is blocked from a few things outright:** touching production from your laptop, rewriting

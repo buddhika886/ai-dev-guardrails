@@ -167,6 +167,19 @@ guard block "an upper-case environment override"          'NPM_CONFIG_REGISTRY=h
 guard allow "git log --before is not npm"                 'git log --before=2026-01-01 --oneline'
 guard allow "npm config get is read-only"                 'npm config get min-release-age'
 
+echo "── rewriting a guardrail file from the shell must ASK"
+guard ask   "sed -i on the bash guard"                   'sed -i "s/exit 2/exit 0/" scripts/claude-bash-guard.sh'
+guard ask   "a redirect over the checks"                 'echo "" > scripts/ci-guardrails.sh'
+guard ask   "rm on the hooks config"                     'rm lefthook.yml'
+guard ask   "cp over the CI workflow"                    'cp /tmp/ci.yml .github/workflows/ci.yml'
+guard ask   "tee into CLAUDE.md"                         'tee CLAUDE.md < /tmp/rules.md'
+guard ask   "appending to .npmrc"                        'printf "allow-git=all\n" >> .npmrc'
+guard allow "reading the checks is fine"                 'cat scripts/ci-guardrails.sh'
+guard allow "running the checks is fine"                 'bash scripts/ci-guardrails.sh'
+guard allow "diffing a guardrail file is fine"           'git diff scripts/ci-guardrails.sh'
+guard allow "sed without -i on a guardrail file is fine" 'sed -n 1,20p scripts/ci-guardrails.sh'
+guard allow "cp between ordinary files is fine"          'cp src/a.ts src/b.ts'
+
 echo "── the ask decision must be well-formed"
 payload=$(node -e 'process.stdout.write(JSON.stringify({tool_name:"Bash",tool_input:{command:"git push origin main"}}))')
 out=$(printf '%s' "$payload" | bash scripts/claude-bash-guard.sh 2>/dev/null)
@@ -205,6 +218,35 @@ guard_long block "reading .env followed by 200 KB still blocks" 'cat .env'
 guard_long block "printenv followed by 200 KB still blocks"   'printenv'
 guard_long block "prod deploy followed by 200 KB still blocks" 'vercel deploy --prod'
 guard_long allow "an ordinary command followed by 200 KB"     'npm test'
+
+echo "── the hooks must still work after the agent changes directory"
+# Claude Code runs command hooks in the agent's current directory, which follows its `cd`. The
+# settings wire each hook through ${CLAUDE_PROJECT_DIR}; these cases run the EXACT command and args
+# from settings.json, substituted the way Claude Code does, from a subdirectory of the project.
+hook_from_subdir() {
+  local event="$1" want="$2" label="$3" cmd="$4" root="$PWD" sub payload out rc decided
+  sub=$(mktemp -d "$PWD/subdir-case.XXXXXX")
+  payload=$(node -e 'process.stdout.write(JSON.stringify({tool_name:"Bash",tool_input:{command:process.argv[1]}}))' "$cmd")
+  out=$(cd "$sub" && printf '%s' "$payload" | CLAUDE_PROJECT_DIR="$root" node -e '
+    const fs=require("fs"), {spawnSync}=require("child_process")
+    const root=process.env.CLAUDE_PROJECT_DIR
+    const h=JSON.parse(fs.readFileSync(root+"/.claude/settings.json","utf8")).hooks[process.argv[1]][0].hooks[0]
+    const sub=(x)=>x.replace(/\$\{CLAUDE_PROJECT_DIR\}/g, root)
+    const r=spawnSync(sub(h.command), (h.args||[]).map(sub), {input: fs.readFileSync(0), encoding:"utf8"})
+    process.stdout.write(r.stdout); process.stderr.write(r.stderr); process.exit(r.status===null?126:r.status)
+  ' "$event" 2>/dev/null); rc=$?
+  rm -rf "$sub"
+  if [ "$rc" -eq 2 ]; then decided=block
+  elif [ "$rc" -eq 0 ] && grep -q '"permissionDecision":"ask"' <<<"$out"; then decided=ask
+  elif [ "$rc" -eq 0 ]; then decided=allow
+  else decided="rc=$rc"; fi
+  if [ "$decided" = "$want" ]; then t_pass "$label"; else t_fail "$label (wanted $want, got $decided)" "$out"; fi
+}
+hook_from_subdir PreToolUse block "from a subdirectory, reading .env still blocks" 'cat .env'
+hook_from_subdir PreToolUse block "from a subdirectory, a prod deploy still blocks" 'vercel deploy --prod'
+hook_from_subdir PreToolUse ask   "from a subdirectory, a push still asks"          'git push origin main'
+hook_from_subdir PreToolUse allow "from a subdirectory, ordinary work is allowed"   'npm test'
+hook_from_subdir Stop       allow "from a subdirectory, the Stop hook finds the guardrails" ''
 
 echo "── the Stop hook warns without ever blocking"
 out=$(bash scripts/claude-stop-guardrails.sh 2>&1); rc=$?

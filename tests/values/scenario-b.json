@@ -35,6 +35,7 @@
 
   "GOVERNANCE_ENABLED": "off",
   "BOOTSTRAP_DATE": "2026-10-26",
+  "CODEOWNERS": "@sig-lib-maintainer",
 
   "_LICENSE_HOLDER": "Sig Lib authors"
 }

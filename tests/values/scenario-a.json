@@ -35,6 +35,7 @@
 
   "GOVERNANCE_ENABLED": "on",
   "BOOTSTRAP_DATE": "2026-10-26",
+  "CODEOWNERS": "@acme/platform-team",
 
   "_LICENSE_HOLDER": ""
 }

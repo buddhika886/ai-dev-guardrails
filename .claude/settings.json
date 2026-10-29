@@ -1,0 +1,47 @@
+{
+  "permissions": {
+    "disableBypassPermissionsMode": "disable",
+    "ask": [
+      "Bash(git commit *)",
+      "Bash(git push *)",
+      "Bash(gh pr create *)",
+      "Bash(gh pr merge *)",
+      "Bash(gh release create *)",
+      "Edit(.template/core/**)",
+      "Write(.template/core/**)",
+      "Edit(.claude/commands/bootstrap.md)",
+      "Write(.claude/commands/bootstrap.md)",
+      "Edit(.github/workflows/ci.yml)",
+      "Write(.github/workflows/ci.yml)",
+      "Edit(.gitleaks.toml)",
+      "Write(.gitleaks.toml)"
+    ],
+    "deny": [
+      "Read(.env)",
+      "Read(.env.*)",
+      "Read(!.env.example)",
+      "Read(*.pem)",
+      "Read(*.key)",
+      "Read(.claude/profiles/*.settings.json)",
+      "Read(~/.npmrc)",
+      "Read(~/.netrc)",
+      "Read(~/.ssh/id_*)",
+      "Read(~/.aws/credentials)"
+    ]
+  },
+  "hooks": {
+    "PreToolUse": [
+      {
+        "matcher": "Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash",
+            "args": ["${CLAUDE_PROJECT_DIR}/.template/core/scripts/claude-bash-guard.sh"],
+            "onFailure": "block"
+          }
+        ]
+      }
+    ]
+  }
+}

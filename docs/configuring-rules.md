@@ -188,12 +188,20 @@ same change. Never hand-edit the copy to make the check pass.
 
 ### Check 8: the AI safety settings are intact
 
-**Built in.** Fails if the hooks, the `git commit`/`git push` ask rules or the `.npmrc` edit rules
-are removed from `.claude/settings.json`, or if any allow rule in either settings file would let a
-consent, deploy, package-adding or secret-printing command through without asking. A saved
-"always allow" for `npm install *` is caught here: plain `npm install` and `npm ci` need no allow
-rule, because the guard only asks when a package name is given. `CONSENT_SAMPLES` lists the commands it tests
-against; add one when you add a deploy tool to the guard.
+**Built in.** Parses `.claude/settings.json` (never a text search) and fails if any of these is
+missing or changed: the two hooks, each wired in exec form through `${CLAUDE_PROJECT_DIR}` so it is
+still found after the AI changes directory, with `"onFailure": "block"` on the command guard so a
+hook that cannot start blocks the command instead of letting it run; every ask rule in
+`REQUIRED_ASK_RULES` and every `Read` deny rule in `REQUIRED_DENY_RULES`; and
+`permissions.disableBypassPermissionsMode: "disable"`, which stops a session being started in the
+mode that skips every prompt. It also fails if either settings file sets `disableAllHooks` or a
+default mode of `bypassPermissions`, or if any allow rule in either file would let a consent,
+deploy, package-adding or secret-printing command through without asking (both the `git push *`
+and the older `git push:*` spellings). A saved "always allow" for `npm install *` is caught here:
+plain `npm install` and `npm ci` need no allow rule, because the guard only asks when a package
+name is given. `CONSENT_SAMPLES` lists the commands it tests against; add one when you add a deploy
+tool to the guard. When you add an ask or deny rule to `settings.json`, add it to the matching
+`REQUIRED_*` list too, so removing it later is caught.
 
 ### Check 9: no client names in the code
 
@@ -382,6 +390,21 @@ The project README's "One-time GitHub setup" section lists these with the other 
 | Core | Everything on this page except check 11. Always installed. |
 | Governance | `docs/governance/` (evidence log, decision record, phase briefs), a PR template, and check 11 |
 | Security | Not built yet: a future `SECURITY.md` with threat model and control table |
+
+The governance tier is for client work, regulated work, or anything that will be audited or handed
+over. It adds:
+
+- **An evidence log** (`docs/governance/EVIDENCE.md`): a table of phases, each with an observable
+  "done when", and the actual proof (test output, CI links) behind every finished phase. Bootstrap
+  writes the first entry itself, from the checks it just ran.
+- **A decision record** (`docs/governance/DECISIONS.md`): settled decisions and why; known
+  exceptions, each with what it costs, when it ends and who owns it; and open questions.
+- **Phase briefs** (`docs/governance/briefs/`): a short plan per phase, so the AI works from a
+  written brief, not a half-remembered conversation.
+- **A pull request template** that asks for evidence.
+
+Check 11 keeps it honest: a phase cannot be marked Done without proof attached, and an exception
+cannot be recorded without a cost, an end and an owner.
 
 Bootstrap removes itself when it finishes, so there is no command to add a tier later. To add
 governance by hand: copy `.template/governance/` from the template repository (`EVIDENCE.md`,
