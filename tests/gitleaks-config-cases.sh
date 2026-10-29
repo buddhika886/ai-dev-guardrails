@@ -106,6 +106,24 @@ expect_caught "a password inside a database URL is caught" "$WORK/core-live/conf
 printf 'DATABASE_URL=postgres://app:<password>@db.internal.acmecorp.net:5432/app\n' > "$WORK/core-clean/runbook.md"
 printf 'DATABASE_URL=postgres://app:local_dev_only@localhost:5432/acme\n' > "$WORK/core-clean/.env.example"
 expect_clean "placeholders and local dev URLs are not flagged" "$WORK/core-clean"
+
+echo "── the GENERATED project's config: no directory-wide allowlist"
+# The generated config once skipped docs/, so a real key pasted into a project's documentation was
+# invisible to both layers. It was measured as not load-bearing, and these cases keep it out.
+for dir in docs tests; do
+  mkdir -p "$WORK/core-blind/$dir"
+  printf 'ANTHROPIC_AUTH_TOKEN=sk-or-v1-%s\n' "$hex" > "$WORK/core-blind/$dir/leaked.md"
+done
+expect_caught "a key under docs/ is caught in a generated project"  "$WORK/core-blind/docs"  "openrouter-api-key"
+expect_caught "a key under tests/ is caught in a generated project" "$WORK/core-blind/tests" "openrouter-api-key"
+
+# What makes the skip unnecessary: the docs a new project ships with scan clean. A future doc with a
+# secret-shaped example fails here, not on every new project's first commit.
+mkdir -p "$WORK/core-docs/docs/governance"
+cp "$ROOT"/docs/*.md "$ROOT"/.template/lang/ts/eslint-escape-hatch.md "$ROOT"/.template/lang/ts/tsconfig-note.md "$WORK/core-docs/docs/"
+cp -R "$ROOT"/.template/governance/. "$WORK/core-docs/docs/governance/"
+cp "$ROOT"/.template/core/README.project.md "$ROOT"/.template/core/CLAUDE.project.md "$WORK/core-docs/"
+expect_clean "the docs a new project ships with are not flagged" "$WORK/core-docs"
 CFG="$ROOT/.gitleaks.toml"
 
 t_summary "GITLEAKS CONFIG CASES"

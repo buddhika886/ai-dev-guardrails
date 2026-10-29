@@ -140,11 +140,7 @@ by:** `gitleaks-config-cases`.
 | gitleaks default ruleset | Scan | Hundreds of known key and token formats |
 | `credential-in-connection-string` | Scan | A password inside a database or service URL |
 | `openrouter-api-key` | Scan | OpenRouter keys (`sk-or-v1-...`) |
-| Allowlist | Policy | Ignores obvious placeholders (`example`, `changeme`, `localhost` and similar), `.env.example`, `.dev.vars.example` and the `docs/` folder |
-
-**Limit.** The generated project's allowlist skips the whole `docs/` folder, so a real key pasted
-into a project's documentation is not caught by this scanner. GitHub's own secret scanning (section
-11), if switched on, still sees it.
+| Allowlist | Policy | Ignores obvious placeholders (`example`, `changeme`, `localhost` and similar), `.env.example` and `.dev.vars.example`; no directory is skipped |
 
 ## 7. Dependencies
 
