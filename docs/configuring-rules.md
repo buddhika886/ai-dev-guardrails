@@ -391,6 +391,21 @@ The project README's "One-time GitHub setup" section lists these with the other 
 | Governance | `docs/governance/` (evidence log, decision record, phase briefs), a PR template, and check 11 |
 | Security | Not built yet: a future `SECURITY.md` with threat model and control table |
 
+The governance tier is for client work, regulated work, or anything that will be audited or handed
+over. It adds:
+
+- **An evidence log** (`docs/governance/EVIDENCE.md`): a table of phases, each with an observable
+  "done when", and the actual proof (test output, CI links) behind every finished phase. Bootstrap
+  writes the first entry itself, from the checks it just ran.
+- **A decision record** (`docs/governance/DECISIONS.md`): settled decisions and why; known
+  exceptions, each with what it costs, when it ends and who owns it; and open questions.
+- **Phase briefs** (`docs/governance/briefs/`): a short plan per phase, so the AI works from a
+  written brief, not a half-remembered conversation.
+- **A pull request template** that asks for evidence.
+
+Check 11 keeps it honest: a phase cannot be marked Done without proof attached, and an exception
+cannot be recorded without a cost, an end and an owner.
+
 Bootstrap removes itself when it finishes, so there is no command to add a tier later. To add
 governance by hand: copy `.template/governance/` from the template repository (`EVIDENCE.md`,
 `DECISIONS.md` and `briefs/` into `docs/governance/`, `pull_request_template.md` into `.github/`),

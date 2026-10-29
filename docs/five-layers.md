@@ -115,3 +115,18 @@ fails on Done without evidence, so the records cannot drift into claims.
 Fail closed (an error in a check counts as a failure), least privilege, generic errors to clients,
 never log secrets or request bodies, and human consent gates for anything outward-facing or
 irreversible.
+
+## Words used in these docs
+
+| Term | Plain meaning |
+| --- | --- |
+| Bootstrap | The one-time setup that turns the kit into your project |
+| Hook | A small script that runs automatically at a set moment (before a command, before a commit) |
+| Guardrails | The automatic checks |
+| CI | The checks GitHub runs on every pull request |
+| Lefthook | The tool that runs checks on your machine when you commit or push |
+| gitleaks | The tool that scans for passwords and API keys |
+| Transcript | The stored chat history between you and the AI |
+| Denylist | Your private list of words that must never be committed |
+| Fail closed | If a check breaks, treat it as a failure, not a pass |
+| Regex / pattern | A short text pattern; `a\|b` means "a or b", `\.` means a real dot |
