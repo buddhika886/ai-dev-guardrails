@@ -61,12 +61,35 @@ npm install left-pad
 pnpm add left-pad
 cat .env
 printenv'
-# Consent rules that .claude/settings.json must keep. Ask rules are evaluated before allow rules, so
-# these hold even when an allowlist wildcard matches the same command.
+# Rules that .claude/settings.json must keep, in full. Ask rules are evaluated before allow rules, so
+# they hold even when an allowlist wildcard matches the same command; deny rules stop the Read tool
+# opening secret files. Keep in step with .template/core/settings.json.
 REQUIRED_ASK_RULES='Bash(git commit *)
 Bash(git push *)
+Bash(gh pr create *)
+Bash(gh pr merge *)
+Bash(gh release create *)
+Bash(npm publish *)
+Bash(pnpm publish *)
+Bash(yarn publish *)
+Bash(yarn npm publish *)
+Bash(bun publish *)
 Edit(.npmrc)
 Write(.npmrc)'
+REQUIRED_DENY_RULES='Read(.env)
+Read(.env.*)
+Read(.dev.vars)
+Read(*.pem)
+Read(*.key)
+Read(*.p12)
+Read(*.pfx)
+Read(~/.npmrc)
+Read(~/.netrc)
+Read(~/.pgpass)
+Read(~/.ssh/id_*)
+Read(~/.aws/credentials)
+Read(~/.docker/config.json)
+Read(~/.kube/config)'
 # Where the governance tier's records live, when it is installed.
 GOVERNANCE_DIR='docs/governance'
 # Dependency policy (check 12). A release must be at least this many days old before npm installs
@@ -163,56 +186,95 @@ echo "[8] Agent consent controls intact (.claude/settings.json, no permission cr
 SETTINGS='.claude/settings.json'
 if [ ! -f "$SETTINGS" ]; then
   fail "$SETTINGS is missing: the agent hooks and consent rules are not wired"
+elif ! command -v node >/dev/null 2>&1; then
+  fail "node is not on PATH, so the agent settings cannot be checked (failing closed)"
 else
-  for hook in claude-bash-guard.sh claude-stop-guardrails.sh; do
-    if grep -qF "$hook" "$SETTINGS"; then ok "$hook is wired"; else fail "$hook is not wired in $SETTINGS"; fi
-  done
-  while IFS= read -r rule; do
-    [ -z "$rule" ] && continue
-    if grep -qF "\"$rule\"" "$SETTINGS"; then ok "ask rule kept: $rule"; else fail "consent rule removed from $SETTINGS: $rule"; fi
-  done <<< "$REQUIRED_ASK_RULES"
-  # Permission creep: an allow rule in either settings file that matches a consent sample. The
-  # .local file is per-machine and gitignored, so CI sees only settings.json; the Stop hook and the
-  # pre-commit run are what catch creep in the local file.
-  if command -v node >/dev/null 2>&1; then
-    # SC2016: the single-quoted block is JavaScript; its $ characters are regex syntax, not shell.
-    # shellcheck disable=SC2016
-    if creep=$(SAMPLES="$CONSENT_SAMPLES" node -e '
-      const fs = require("fs")
-      const samples = process.env.SAMPLES.split("\n").filter(Boolean)
-      // Claude Code Bash rule semantics: * is any text, and a trailing " *" also matches the bare
-      // command. "Bash" alone, or "Bash(*)", allows everything.
-      const toRegex = (glob) => {
-        let g = glob, bare = null
-        if (g.endsWith(" *") && g.indexOf("*") === g.length - 1) bare = g.slice(0, -2)
-        const esc = (s) => s.replace(/[.+?^${}()|[\]\\]/g, "\\$&").replace(/\*/g, ".*")
-        return new RegExp("^(" + esc(g) + (bare === null ? "" : "|" + esc(bare)) + ")$")
+  # The settings are parsed, not grepped: a hook named inside a comment, a disabled hook block or a
+  # rule moved from ask to allow all look fine to a substring search. Every assertion here has a
+  # mutation test in tests/guardrail-cases.sh.
+  # SC2016: the single-quoted block is JavaScript; its $ characters are regex and template syntax.
+  # shellcheck disable=SC2016
+  if report=$(SAMPLES="$CONSENT_SAMPLES" ASK="$REQUIRED_ASK_RULES" DENY="$REQUIRED_DENY_RULES" node -e '
+    const fs = require("fs")
+    const lines = (s) => s.split("\n").filter(Boolean)
+    const samples = lines(process.env.SAMPLES), needAsk = lines(process.env.ASK), needDeny = lines(process.env.DENY)
+    const [settingsFile, localFile] = process.argv.slice(1)
+    const oks = [], errs = []
+    const read = (f) => JSON.parse(fs.readFileSync(f, "utf8"))
+    const s = read(settingsFile)
+    const perms = s.permissions || {}
+
+    // Hooks: each guard must be wired as an exec-form command hook on a project-root path, so it is
+    // found after the agent changes directory, and the bash guard must block when it cannot run.
+    const hooksOf = (event, matcher) => ((s.hooks || {})[event] || [])
+      .filter((g) => matcher === null || g.matcher === matcher)
+      .flatMap((g) => g.hooks || [])
+    const wired = (event, matcher, script, mustBlock) => {
+      const label = `${script} is wired`
+      const h = hooksOf(event, matcher).find((x) => x.type === "command" && Array.isArray(x.args)
+        && x.args.some((a) => a === "${CLAUDE_PROJECT_DIR}/scripts/" + script))
+      if (!h) { errs.push(`${script} is not wired in ${settingsFile} as a ${event} hook with args ["\${CLAUDE_PROJECT_DIR}/scripts/${script}"] (a relative path is not found after the agent changes directory)`); return }
+      if (mustBlock && h.onFailure !== "block") { errs.push(`${script} must set "onFailure": "block" in ${settingsFile}: a hook that cannot start would otherwise let the command run`); return }
+      oks.push(label)
+    }
+    wired("PreToolUse", "Bash", "claude-bash-guard.sh", true)
+    wired("Stop", null, "claude-stop-guardrails.sh", false)
+
+    // Consent and deny rules: the full lists, not a sample.
+    for (const r of needAsk) {
+      if ((perms.ask || []).includes(r)) oks.push("ask rule kept: " + r)
+      else errs.push(`consent rule removed from ${settingsFile}: ${r}`)
+    }
+    for (const r of needDeny) {
+      if ((perms.deny || []).includes(r)) oks.push("deny rule kept: " + r)
+      else errs.push(`deny rule removed from ${settingsFile}: ${r}`)
+    }
+
+    // Modes that switch the consent layer off. bypassPermissions skips every prompt, including the
+    // ask rules and the ask decisions of the guard, so the project must disable it; disableAllHooks
+    // switches the guard off outright. The local file is checked too: it is per-machine, so CI sees
+    // only settings.json, and the Stop hook and pre-commit run are what catch it locally.
+    if (perms.disableBypassPermissionsMode === "disable") oks.push("bypass-permissions mode is disabled for this project")
+    else errs.push(`${settingsFile}: permissions.disableBypassPermissionsMode must be "disable" (bypass mode skips every consent prompt)`)
+    for (const file of [settingsFile, localFile]) {
+      if (!fs.existsSync(file)) continue
+      const j = read(file), p = j.permissions || {}
+      if (j.disableAllHooks === true) errs.push(`${file}: disableAllHooks is true, which switches off the bash guard`)
+      if (p.defaultMode === "bypassPermissions") errs.push(`${file}: permissions.defaultMode is bypassPermissions, which skips every consent prompt`)
+    }
+
+    // Permission creep: an allow rule in either file that matches a consent sample means a saved
+    // Yes-and-do-not-ask-again has quietly turned a consent rule back into prose.
+    // Claude Code Bash rule semantics: * is any text; a trailing " *" or ":*" also matches the bare
+    // command. "Bash" alone, or "Bash(*)", allows everything.
+    const toRegex = (glob) => {
+      let g = glob, bare = null
+      if (g.endsWith(":*")) g = g.slice(0, -2) + " *"
+      if (g.endsWith(" *") && g.indexOf("*") === g.length - 1) bare = g.slice(0, -2)
+      const esc = (x) => x.replace(/[.+?^${}()|[\]\\]/g, "\\$&").replace(/\*/g, ".*")
+      return new RegExp("^(" + esc(g) + (bare === null ? "" : "|" + esc(bare)) + ")$")
+    }
+    const creep = []
+    for (const file of [settingsFile, localFile]) {
+      if (!fs.existsSync(file)) continue
+      for (const rule of (read(file).permissions || {}).allow || []) {
+        let re
+        if (rule === "Bash" || rule === "Bash(*)") re = /.*/
+        else { const m = /^Bash\((.*)\)$/.exec(rule); if (!m) continue; re = toRegex(m[1]) }
+        const hit = samples.find((x) => re.test(x))
+        if (hit) creep.push(file + ": " + rule + " pre-approves \"" + hit + "\"")
       }
-      const out = []
-      for (const file of process.argv.slice(1)) {
-        if (!fs.existsSync(file)) continue
-        const allow = ((JSON.parse(fs.readFileSync(file, "utf8")).permissions || {}).allow) || []
-        for (const rule of allow) {
-          let re
-          if (rule === "Bash" || rule === "Bash(*)") re = /.*/
-          else { const m = /^Bash\((.*)\)$/.exec(rule); if (!m) continue; re = toRegex(m[1]) }
-          const hit = samples.find((s) => re.test(s))
-          if (hit) out.push(file + ": " + rule + " pre-approves \"" + hit + "\"")
-        }
-      }
-      process.stdout.write(out.join("\n"))
-    ' "$SETTINGS" .claude/settings.local.json 2>&1); then
-      if [ -n "$creep" ]; then
-        fail "permission creep: allow rule(s) pre-approve outward-facing or secret-printing commands:"
-        echo "$creep" | sed 's/^/      /'
-      else
-        ok "no allow rule pre-approves a consent command"
-      fi
-    else
-      fail "could not parse the settings files (failing closed):"; echo "$creep" | sed 's/^/      /'
-    fi
+    }
+    if (creep.length) errs.push("permission creep: allow rule(s) pre-approve outward-facing or secret-printing commands:\n" + creep.map((c) => "      " + c).join("\n"))
+    else oks.push("no allow rule pre-approves a consent command")
+
+    process.stdout.write([...oks.map((l) => "OK " + l), ...errs.map((l) => "ERR " + l)].join("\n"))
+  ' "$SETTINGS" .claude/settings.local.json 2>&1); then
+    while IFS= read -r line; do
+      case "$line" in "OK "*) ok "${line#OK }" ;; "ERR "*) fail "${line#ERR }" ;; "      "*) echo "$line" ;; esac
+    done <<< "$report"
   else
-    fail "node is not on PATH, so permission creep cannot be checked (failing closed)"
+    fail "could not parse the settings files (failing closed):"; echo "$report" | sed 's/^/      /'
   fi
 fi
 

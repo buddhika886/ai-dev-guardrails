@@ -137,6 +137,33 @@ portable_sed '/"Bash(git push \*)",/d' .claude/settings.json
 expect_reject "removing a required ask rule is caught" "consent rule removed"
 portable_sed 's|claude-bash-guard.sh|true|' .claude/settings.json
 expect_reject "unwiring the bash guard is caught" "claude-bash-guard.sh is not wired"
+portable_sed 's|claude-stop-guardrails.sh|true|' .claude/settings.json
+expect_reject "unwiring the Stop hook is caught" "claude-stop-guardrails.sh is not wired"
+# A relative path is found only while the agent sits at the project root; after `cd apps/web` the
+# hook cannot start, and Claude Code treats a hook that cannot start as non-blocking.
+# SC2016: ${CLAUDE_PROJECT_DIR} is literal on purpose; Claude Code expands it when it runs the hook.
+# shellcheck disable=SC2016
+portable_sed 's|${CLAUDE_PROJECT_DIR}/scripts/claude-bash-guard.sh|scripts/claude-bash-guard.sh|' .claude/settings.json
+expect_reject "a relative hook path is caught" "claude-bash-guard.sh is not wired"
+node -e 'const f=".claude/settings.json",fs=require("fs");const j=JSON.parse(fs.readFileSync(f,"utf8"));delete j.hooks.PreToolUse[0].hooks[0].onFailure;fs.writeFileSync(f,JSON.stringify(j,null,2))'
+expect_reject "dropping onFailure: block is caught" 'must set "onFailure": "block"'
+# Shell form (no args array) re-parses the path through a shell; the check requires exec form.
+# SC2016: ${CLAUDE_PROJECT_DIR} is literal on purpose; Claude Code expands it when it runs the hook.
+# shellcheck disable=SC2016
+node -e 'const f=".claude/settings.json",fs=require("fs");const j=JSON.parse(fs.readFileSync(f,"utf8"));const h=j.hooks.PreToolUse[0].hooks[0];h.command="bash ${CLAUDE_PROJECT_DIR}/scripts/claude-bash-guard.sh";delete h.args;fs.writeFileSync(f,JSON.stringify(j,null,2))'
+expect_reject "a shell-form hook command is caught" "claude-bash-guard.sh is not wired"
+portable_sed '/"disableBypassPermissionsMode": "disable",/d' .claude/settings.json
+expect_reject "removing the bypass-mode lock is caught" "disableBypassPermissionsMode must be"
+portable_sed '/"Read(.env)",/d' .claude/settings.json
+expect_reject "removing a Read deny rule is caught" "deny rule removed from .claude/settings.json: Read(.env)"
+portable_sed '/"Bash(gh pr create \*)",/d' .claude/settings.json
+expect_reject "removing a non-sample ask rule is caught" "consent rule removed from .claude/settings.json: Bash(gh pr create *)"
+mkdir -p .claude; printf '{"disableAllHooks": true}\n' > .claude/settings.local.json
+expect_reject "disableAllHooks in the local file is caught" "disableAllHooks is true"; clean_local
+mkdir -p .claude; printf '{"permissions":{"defaultMode":"bypassPermissions"}}\n' > .claude/settings.local.json
+expect_reject "bypassPermissions as the local default mode is caught" "defaultMode is bypassPermissions"; clean_local
+local_allow '["Bash(git push:*)"]'
+expect_reject "the legacy :* prefix form is caught as creep" "permission creep"; clean_local
 rm -f .claude/settings.json
 expect_reject "a missing settings file is caught" ".claude/settings.json is missing"
 local_allow '["Bash(npm test)", "Bash(git push *)"]'

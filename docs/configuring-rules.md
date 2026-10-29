@@ -188,12 +188,20 @@ same change. Never hand-edit the copy to make the check pass.
 
 ### Check 8: the AI safety settings are intact
 
-**Built in.** Fails if the hooks, the `git commit`/`git push` ask rules or the `.npmrc` edit rules
-are removed from `.claude/settings.json`, or if any allow rule in either settings file would let a
-consent, deploy, package-adding or secret-printing command through without asking. A saved
-"always allow" for `npm install *` is caught here: plain `npm install` and `npm ci` need no allow
-rule, because the guard only asks when a package name is given. `CONSENT_SAMPLES` lists the commands it tests
-against; add one when you add a deploy tool to the guard.
+**Built in.** Parses `.claude/settings.json` (never a text search) and fails if any of these is
+missing or changed: the two hooks, each wired in exec form through `${CLAUDE_PROJECT_DIR}` so it is
+still found after the AI changes directory, with `"onFailure": "block"` on the command guard so a
+hook that cannot start blocks the command instead of letting it run; every ask rule in
+`REQUIRED_ASK_RULES` and every `Read` deny rule in `REQUIRED_DENY_RULES`; and
+`permissions.disableBypassPermissionsMode: "disable"`, which stops a session being started in the
+mode that skips every prompt. It also fails if either settings file sets `disableAllHooks` or a
+default mode of `bypassPermissions`, or if any allow rule in either file would let a consent,
+deploy, package-adding or secret-printing command through without asking (both the `git push *`
+and the older `git push:*` spellings). A saved "always allow" for `npm install *` is caught here:
+plain `npm install` and `npm ci` need no allow rule, because the guard only asks when a package
+name is given. `CONSENT_SAMPLES` lists the commands it tests against; add one when you add a deploy
+tool to the guard. When you add an ask or deny rule to `settings.json`, add it to the matching
+`REQUIRED_*` list too, so removing it later is caught.
 
 ### Check 9: no client names in the code
 

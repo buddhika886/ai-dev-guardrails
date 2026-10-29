@@ -33,11 +33,17 @@ running the same command via the input-box `!` prefix is unaffected):
   It fails closed on its own failure modes: an absent hook payload blocks, and an unparseable one (or
   a machine with no JSON parser on `PATH`) is pattern-matched raw rather than waved through, because
   a guard that goes quiet when a dependency is missing is worse than no guard.
-- **Permission rules** back the guard up. `permissions.ask` covers the core consent commands and
-  `permissions.deny` stops the Read tool opening secret files. Claude Code evaluates deny, then ask,
+  The hook is wired in exec form through `${CLAUDE_PROJECT_DIR}`, because Claude Code runs hooks in
+  the agent's current directory and a relative path stops resolving after `cd apps/web`; and with
+  `onFailure: block`, because Claude Code otherwise treats a hook that cannot start as a non-blocking
+  error and runs the command. Both are asserted by check [8].
+- **Permission rules** back the guard up. `permissions.ask` covers the core consent commands,
+  `permissions.deny` stops the Read tool opening secret files, and `disableBypassPermissionsMode`
+  keeps a session out of the one mode that skips every prompt. Claude Code evaluates deny, then ask,
   then allow, so an allowlist wildcard saved in `settings.local.json` cannot silence them. Guardrail
-  check [8] fails if the rules are removed or if an allow rule pre-approves a consent command, which
-  is how a written consent rule quietly turns back into prose.
+  check [8] parses the settings and fails if any hook or rule is removed or weakened, if either
+  settings file disables hooks or defaults to bypass mode, or if an allow rule pre-approves a
+  consent command, which is how a written consent rule quietly turns back into prose.
 - **Stop** (`claude-stop-guardrails.sh`) runs the fast guardrails when a turn ends and warns, naming
   the first failing check, so a violation is noticed before anything is committed.
 

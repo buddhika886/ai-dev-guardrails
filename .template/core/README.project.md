@@ -50,7 +50,8 @@ gh api -X PUT repos/OWNER/REPO/automated-security-fixes    # Dependabot security
 
 - **It asks before anything leaves your machine:** commits, pushes, pull requests, publishes,
   deploys, remote migrations, remote secret and config changes. Every time, even if someone clicked
-  "don't ask again" earlier.
+  "don't ask again" earlier. (Bypass-permissions mode would skip the prompt; the project settings
+  switch it off.)
 - **It asks before adding a package** (`npm install <name>`, `pnpm add`, `yarn add`), because a
   package name an assistant suggests may not be the one you meant.
 - **It is blocked from a few things outright:** touching production from your laptop, rewriting

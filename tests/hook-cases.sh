@@ -206,6 +206,35 @@ guard_long block "printenv followed by 200 KB still blocks"   'printenv'
 guard_long block "prod deploy followed by 200 KB still blocks" 'vercel deploy --prod'
 guard_long allow "an ordinary command followed by 200 KB"     'npm test'
 
+echo "── the hooks must still work after the agent changes directory"
+# Claude Code runs command hooks in the agent's current directory, which follows its `cd`. The
+# settings wire each hook through ${CLAUDE_PROJECT_DIR}; these cases run the EXACT command and args
+# from settings.json, substituted the way Claude Code does, from a subdirectory of the project.
+hook_from_subdir() {
+  local event="$1" want="$2" label="$3" cmd="$4" root="$PWD" sub payload out rc decided
+  sub=$(mktemp -d "$PWD/subdir-case.XXXXXX")
+  payload=$(node -e 'process.stdout.write(JSON.stringify({tool_name:"Bash",tool_input:{command:process.argv[1]}}))' "$cmd")
+  out=$(cd "$sub" && printf '%s' "$payload" | CLAUDE_PROJECT_DIR="$root" node -e '
+    const fs=require("fs"), {spawnSync}=require("child_process")
+    const root=process.env.CLAUDE_PROJECT_DIR
+    const h=JSON.parse(fs.readFileSync(root+"/.claude/settings.json","utf8")).hooks[process.argv[1]][0].hooks[0]
+    const sub=(x)=>x.replace(/\$\{CLAUDE_PROJECT_DIR\}/g, root)
+    const r=spawnSync(sub(h.command), (h.args||[]).map(sub), {input: fs.readFileSync(0), encoding:"utf8"})
+    process.stdout.write(r.stdout); process.stderr.write(r.stderr); process.exit(r.status===null?126:r.status)
+  ' "$event" 2>/dev/null); rc=$?
+  rm -rf "$sub"
+  if [ "$rc" -eq 2 ]; then decided=block
+  elif [ "$rc" -eq 0 ] && grep -q '"permissionDecision":"ask"' <<<"$out"; then decided=ask
+  elif [ "$rc" -eq 0 ]; then decided=allow
+  else decided="rc=$rc"; fi
+  if [ "$decided" = "$want" ]; then t_pass "$label"; else t_fail "$label (wanted $want, got $decided)" "$out"; fi
+}
+hook_from_subdir PreToolUse block "from a subdirectory, reading .env still blocks" 'cat .env'
+hook_from_subdir PreToolUse block "from a subdirectory, a prod deploy still blocks" 'vercel deploy --prod'
+hook_from_subdir PreToolUse ask   "from a subdirectory, a push still asks"          'git push origin main'
+hook_from_subdir PreToolUse allow "from a subdirectory, ordinary work is allowed"   'npm test'
+hook_from_subdir Stop       allow "from a subdirectory, the Stop hook finds the guardrails" ''
+
 echo "── the Stop hook warns without ever blocking"
 out=$(bash scripts/claude-stop-guardrails.sh 2>&1); rc=$?
 if [ "$rc" -eq 0 ] && [ -z "$out" ]; then

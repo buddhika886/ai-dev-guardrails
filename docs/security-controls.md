@@ -13,7 +13,7 @@ the list cannot quietly fall behind.
 | Type | Meaning |
 | --- | --- |
 | **Block** | Refused outright; nobody can approve it from the AI session |
-| **Ask** | You are prompted every time, even if "don't ask again" was clicked before |
+| **Ask** | You are prompted every time the command is recognised, even if "don't ask again" was clicked before and in auto mode. Bypass-permissions mode would skip the prompt, so the settings disable that mode |
 | **Check** | A guardrail that fails the commit, push or CI run |
 | **Scan** | A scanner that fails on findings (secrets, known vulnerabilities) |
 | **Policy** | A setting in a committed file that a tool enforces, and a check keeps in place |
@@ -66,11 +66,12 @@ ask, then allow, so a saved "allow" cannot override these. **Proven by:** `guard
 | `Bash(gh pr create *)`, `Bash(gh pr merge *)`, `Bash(gh release create *)` | Ask | Pull requests and releases |
 | `Bash(npm publish *)`, `Bash(pnpm publish *)`, `Bash(yarn publish *)`, `Bash(yarn npm publish *)`, `Bash(bun publish *)` | Ask | Publishing a package |
 | `Edit(.npmrc)`, `Write(.npmrc)` | Ask | The AI changing the dependency policy file |
+| `disableBypassPermissionsMode: "disable"` | Policy | A session cannot be started in bypass-permissions mode, which skips every prompt including the ask rules above and the guard's ask decisions. Check 8 fails without it |
 | `Read(.env)`, `Read(.env.*)`, `Read(.dev.vars)` (with `Read(!.env.example)`, `Read(!.env.sample)` allowed) | Block | Claude Code's file reader opening environment files |
 | `Read(*.pem)`, `Read(*.key)`, `Read(*.p12)`, `Read(*.pfx)` | Block | Opening private keys and certificates |
 | `Read(~/.npmrc)`, `Read(~/.netrc)`, `Read(~/.pgpass)`, `Read(~/.ssh/id_*)`, `Read(~/.aws/credentials)`, `Read(~/.docker/config.json)`, `Read(~/.kube/config)` | Block | Opening credential files in your home directory |
-| PreToolUse hook | Policy | Wires the command guard (section 1) to every shell command |
-| Stop hook (`scripts/claude-stop-guardrails.sh`) | Check | At the end of each AI turn, runs the fast guardrails and warns, naming the first failing check. Never blocks |
+| PreToolUse hook | Policy | Wires the command guard (section 1) to every shell command, in exec form through `${CLAUDE_PROJECT_DIR}` so it is found after the AI changes directory, with `onFailure: block` so a guard that cannot start blocks the command rather than letting it run (needs Claude Code 2.1.295 or later; older versions ignore the field). Check 8 fails on a relative path, shell form or a missing `onFailure` |
+| Stop hook (`scripts/claude-stop-guardrails.sh`) | Check | At the end of each AI turn, runs the fast guardrails from the project root and warns, naming the first failing check. Never blocks |
 
 ## 3. Guardrail checks
 
@@ -88,7 +89,7 @@ of each AI turn (fast mode). Fast mode skips checks 6 and 7. A check that does n
 | 5 | Migrations are only ever added | `MIGRATIONS_DIR` | No migrations folder; base ref unavailable |
 | 6 | No secrets in the built app | `BUNDLE_DIR`, `BUNDLE_LEAK_PATTERNS` | No build folder; fast mode; not built yet |
 | 7 | Database schema matches the committed copy | `SCHEMA_DUMP_CMD`, `SCHEMA_DUMP_FILE` | No database; fast mode |
-| 8 | AI safety settings intact: hooks wired, required ask rules present, no allow rule pre-approves a consent, deploy, package or secret-printing command | `CONSENT_SAMPLES`, `REQUIRED_ASK_RULES` | Never |
+| 8 | AI safety settings intact (parsed, not grepped): both hooks wired through `${CLAUDE_PROJECT_DIR}` in exec form with `onFailure: block` on the guard; every required ask and deny rule present; bypass-permissions mode disabled; no `disableAllHooks` or bypass default mode in either settings file; no allow rule (`*` or `:*` form) pre-approves a consent, deploy, package or secret-printing command | `CONSENT_SAMPLES`, `REQUIRED_ASK_RULES`, `REQUIRED_DENY_RULES` | Never |
 | 9 | No client names in tracked or staged files (reports file and line only); the denylist itself is never tracked | `.guardrails/denylist.local`, `GUARDRAILS_DENYLIST` | No denylist |
 | 10 | Local git hooks installed | None | In CI |
 | 11 | Governance records honest: Done needs evidence; exceptions need cost, exit and owner | `GOVERNANCE_ENABLED` | Governance tier not installed |

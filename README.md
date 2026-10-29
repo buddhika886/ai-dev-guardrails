@@ -101,11 +101,13 @@ is removed, so your project contains only what it needs.
 
 ## What it's like day to day
 
-**The AI asks before anything leaves your machine.** You get a prompt, every single time, for:
+**The AI asks before anything leaves your machine.** You get a prompt, every time it recognises
+one of these, for:
 commits, pushes, pull requests, publishing a package, deploys, changes to a live database, and
 changes to secrets or settings on a hosting platform. It also asks before adding a package, so you
 see the exact name before anything is installed. This holds even if someone clicked "don't ask
-again" earlier, and even in auto mode. Deploys ask by default, even before you have a live site: a
+again" earlier, and even in auto mode. (Claude Code's bypass-permissions mode would skip the prompt,
+so the project settings switch that mode off.) Deploys ask by default, even before you have a live site: a
 question costs a second, an accidental deploy costs much more.
 
 **Some things are blocked outright:**
@@ -248,8 +250,10 @@ No safety system is complete. The gaps:
 
 - **Local checks can be skipped** with `git commit --no-verify`. That's why the GitHub checks are the
   final word: protect your `main` branch so they must pass.
-- **The command guard reads command text.** A command that reaches production indirectly, through a
-  variable or a script, may slip past. The real protection for production is a rule: the AI prepares
+- **It is built for mistakes, not for an AI working against you.** The guard reads command text, so
+  an unusual spelling, a variable or a script can get past it, and a prompt injection (instructions
+  hidden in a file or page the AI reads) could steer it round the rules. The checks on GitHub and
+  branch protection are what limit the damage in that case. The real protection for production is a rule: the AI prepares
   production commands, and a person runs them.
 - **It only watches the AI.** Commands you type in your own terminal aren't checked.
 - **A leaked secret can't be un-leaked.** If one reaches the chat history, change it.
