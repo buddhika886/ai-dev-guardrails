@@ -4,7 +4,8 @@ Every rule in this project lives in a plain text file you can read and change. T
 them one by one: what each rule does, where it lives, and how to change it safely.
 
 Why each rule exists is explained separately, in [why-these-rules.md](why-these-rules.md). Read
-that before switching a rule off.
+that before switching a rule off. The complete list of controls is in
+[security-controls.md](security-controls.md).
 
 `/bootstrap` filled in the project-specific values from your interview answers. You only need this
 page when the project grows: a new deploy tool, a new secret, a new public setting.

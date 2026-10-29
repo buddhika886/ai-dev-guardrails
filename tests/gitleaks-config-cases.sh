@@ -79,8 +79,8 @@ expect_caught "a key under .claude/ is still caught"       "$WORK/blind/.claude"
 
 echo "── the committed placeholders must not fire"
 mkdir -p "$WORK/placeholder"
-cp "$ROOT/.claude/openrouter.settings.json.example" "$WORK/placeholder/"
-expect_clean "the OpenRouter profile example is not flagged" "$WORK/placeholder"
+cp "$ROOT"/.claude/profiles/*.settings.json.example "$WORK/placeholder/"
+expect_clean "the example model profiles are not flagged" "$WORK/placeholder"
 
 echo "── the repo itself must be clean, working tree and full history"
 if gitleaks detect --source "$ROOT" --config "$CFG" --redact >/dev/null 2>&1; then

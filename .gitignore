@@ -28,8 +28,10 @@ credentials*.json
 # Claude Code local (per-user) settings
 .claude/settings.local.json
 
-# OpenRouter routing profile: holds a live sk-or- key. The committed
-# .claude/openrouter.settings.json.example beside it is the template to copy.
+# Model profiles for scripts/claude-profile.sh: each holds a live API key. The committed
+# .settings.json.example files beside them are the templates to copy. The second line covers the
+# OpenRouter profile's old location.
+.claude/profiles/*.settings.json
 .claude/openrouter.settings.json
 
 # In-progress development notes. Temporary: remove this entry (and the file, or promote its durable

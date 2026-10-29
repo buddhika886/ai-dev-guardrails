@@ -74,6 +74,7 @@ cp "$T/core/CLAUDE.project.md" CLAUDE.md.pending   # held back for Step 5
 cp "$T/core/README.project.md" README.md.pending   # held back for Step 5
 ensure_ignored '.guardrails/*.local'
 ensure_ignored '.claude/settings.local.json'
+ensure_ignored '.claude/profiles/*.settings.json'
 ensure_ignored '.claude/openrouter.settings.json'
 
 # ---- bootstrap Step 4.2: copy the TypeScript fragment ----

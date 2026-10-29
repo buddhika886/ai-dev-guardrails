@@ -84,8 +84,9 @@ Do these in order. Show the user what you are doing at each step.
    - in `.gitignore`, the template-only entries `DEVLOG.md` and `PROJECT-GUIDE.md` and the comment
      lines directly above each
    `LICENSE` is handled in Step 5. Keep `docs/five-layers.md`, `docs/configuring-rules.md`,
-   `docs/why-these-rules.md`, `docs/openrouter.md`, `scripts/claude-or.sh` and `.claude/openrouter.settings.json.example`:
-   they are project documentation and an optional developer tool, shipped on purpose.
+   `docs/why-these-rules.md`, `docs/security-controls.md`, `docs/choosing-a-model.md`, `scripts/claude-profile.sh`, `scripts/claude-or.sh`
+   and the `.claude/profiles/*.settings.json.example` files: they are project documentation and an
+   optional developer tool (running Claude Code with another provider or model), shipped on purpose.
 1. **Copy core.** Copy every file from `.template/core/` to its destination:
    - `.template/core/CLAUDE.project.md` → hold for Step 5 (do not place yet).
    - `.template/core/lefthook.yml` → `lefthook.yml`
@@ -95,10 +96,11 @@ Do these in order. Show the user what you are doing at each step.
    - `.template/core/settings.json` → `.claude/settings.json`
    - `.template/core/dependabot.yml` → `.github/dependabot.yml`
    - `.template/core/README.project.md` → hold for Step 5 (do not place yet).
-   - Make sure `.gitignore` contains `.guardrails/*.local`, `.claude/settings.local.json` and
-     `.claude/openrouter.settings.json` (append any that are missing; create `.gitignore` if there
-     is none). The first keeps the client denylist out of git; the second keeps per-machine
-     permission approvals out of the shared repo; the third keeps a developer's OpenRouter key out.
+   - Make sure `.gitignore` contains `.guardrails/*.local`, `.claude/settings.local.json`,
+     `.claude/profiles/*.settings.json` and `.claude/openrouter.settings.json` (append any that are
+     missing; create `.gitignore` if there is none). The first keeps the client denylist out of git;
+     the second keeps per-machine permission approvals out of the shared repo; the last two keep a
+     developer's model-provider keys out (the fourth is the OpenRouter profile's old location).
 2. **Copy the language fragment** (TypeScript): `biome.json`, `.nvmrc`, `.npmrc` to the repo root;
    `eslint-escape-hatch.md` and `tsconfig-note.md` → `docs/`. Merge `package-scripts.json`'s
    `scripts` block into `package.json` (create a minimal `package.json` first if none exists). Leave

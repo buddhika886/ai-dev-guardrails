@@ -2,7 +2,8 @@
 
 Every rule in this project is there because of something that keeps happening to real teams. This
 page explains each one in plain language: what it does, why it exists, and how it compares with
-common practice. For how to change a rule, see [configuring-rules.md](configuring-rules.md).
+common practice. For how to change a rule, see [configuring-rules.md](configuring-rules.md). For
+the complete list of controls in one table per layer, see [security-controls.md](security-controls.md).
 
 Most of these rules are not new ideas. They are the habits careful teams already follow, written
 down and checked automatically, so they still hold on a busy day or when an AI assistant is doing
@@ -340,6 +341,25 @@ anything that slipped past the local scan, for example with `git commit --no-ver
 
 **Common practice.** Secret scanning is standard, and GitHub also offers it with push protection,
 which this project's setup steps recommend switching on.
+
+---
+
+## Model profiles
+
+**What it does.** A developer can run Claude Code through another provider (OpenRouter, Amazon
+Bedrock, Google Vertex and others) with `./scripts/claude-profile.sh <name>`. The profile applies to
+that one session; the launcher refuses a profile that git could commit, or one still holding
+placeholder values.
+
+**Why.** A profile holds an API key, and a key in a committed file is a leaked key. Applying it per
+session means plain `claude` always stays on the default, so nobody moves the team to another
+provider, or another bill, by accident. Choosing a provider also chooses who sees your code, which
+is why [choosing-a-model.md](choosing-a-model.md) starts with that question and explains zero data
+retention.
+
+**Common practice.** Keys live outside the repository, in a gitignored file or a secrets manager,
+with a committed example showing the shape. The guardrails themselves do not depend on the choice:
+Claude Code enforces them whatever model is behind it.
 
 ---
 

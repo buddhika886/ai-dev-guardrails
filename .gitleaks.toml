@@ -13,7 +13,7 @@ useDefault = true
 
 # The same rule the template ships to generated projects. Armed here too, because a live OpenRouter
 # key sits in this working directory as soon as a contributor copies
-# `.claude/openrouter.settings.json.example` to its real path. See the README.
+# `.claude/profiles/openrouter.settings.json.example` to its real path. See docs/choosing-a-model.md.
 [[rules]]
 id = "openrouter-api-key"
 description = "OpenRouter API key"

@@ -62,6 +62,8 @@ gh api -X PUT repos/OWNER/REPO/automated-security-fixes    # Dependabot security
 
 - [CLAUDE.md](CLAUDE.md): the rules the AI reads first, and the known limits of each control.
 - [docs/five-layers.md](docs/five-layers.md): how the five layers fit together.
+- [docs/security-controls.md](docs/security-controls.md): every control, where it is enforced and
+  where it stops.
 - [docs/why-these-rules.md](docs/why-these-rules.md): why each rule exists, in plain language.
 - [docs/configuring-rules.md](docs/configuring-rules.md): how to change a rule, one by one.
 {{IF_GOVERNANCE_TIER}}- [docs/governance/](docs/governance/): the evidence log, decision record and phase briefs.
@@ -72,8 +74,10 @@ Never commit a secret, personal data or a client's real name. Put client identif
 be committed in `.guardrails/denylist.local` (it is gitignored), one pattern per line; the guardrails
 block any commit that contains them. Ask a maintainer for the list rather than sharing it in chat.
 
-### Using OpenRouter instead of a Claude subscription (optional)
+### Using a different model or provider (optional)
 
-A developer can run Claude Code through OpenRouter with `./scripts/claude-or.sh`. Before doing so
-on this project, check that routing code and prompts through a third party is allowed for this work.
-See [docs/openrouter.md](docs/openrouter.md).
+A developer can run their own Claude Code sessions through OpenRouter (including zero data
+retention), Amazon Bedrock, Google Vertex or another provider, with
+`./scripts/claude-profile.sh <profile>` (`./scripts/claude-or.sh` for OpenRouter). The guardrails
+still apply. Before doing so on this project, check that sending code and prompts to that provider
+is allowed for this work. See [docs/choosing-a-model.md](docs/choosing-a-model.md).

@@ -48,6 +48,8 @@ run_cases "guardrail cases (scenario A)" \
   bash "$ROOT/tests/guardrail-cases.sh" "$WORK/acme-portal"
 run_cases "hook cases (scenario A)" \
   bash "$ROOT/tests/hook-cases.sh" "$WORK/acme-portal"
+run_cases "model profile cases (scenario A)" \
+  bash "$ROOT/tests/profile-cases.sh" "$WORK/acme-portal"
 
 run_suite "install: scenario B (plain library, no prod, no database, no bundle, no governance)" \
   bash "$ROOT/tests/install.sh" b "$WORK/sig-lib"
@@ -57,6 +59,9 @@ run_cases "sparse cases (scenario B)" \
 
 run_suite "gitleaks config cases (this repo's own .gitleaks.toml)" \
   bash "$ROOT/tests/gitleaks-config-cases.sh"
+
+run_suite "controls doc cases (docs/security-controls.md lists every control)" \
+  bash "$ROOT/tests/controls-doc-cases.sh"
 
 echo
 if [ "$failed" -ne 0 ]; then
