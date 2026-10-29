@@ -1,0 +1,10 @@
+{
+  "env": {
+    "CLAUDE_CODE_USE_VERTEX": "1",
+    "ANTHROPIC_VERTEX_PROJECT_ID": "REPLACE-ME-gcp-project-id",
+    "CLOUD_ML_REGION": "global",
+    "ANTHROPIC_DEFAULT_OPUS_MODEL": "REPLACE-ME-vertex-opus-model-id",
+    "ANTHROPIC_DEFAULT_SONNET_MODEL": "REPLACE-ME-vertex-sonnet-model-id",
+    "ANTHROPIC_DEFAULT_HAIKU_MODEL": "REPLACE-ME-vertex-haiku-model-id"
+  }
+}

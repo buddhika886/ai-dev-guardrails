@@ -72,8 +72,10 @@ Never commit a secret, personal data or a client's real name. Put client identif
 be committed in `.guardrails/denylist.local` (it is gitignored), one pattern per line; the guardrails
 block any commit that contains them. Ask a maintainer for the list rather than sharing it in chat.
 
-### Using OpenRouter instead of a Claude subscription (optional)
+### Using a different model or provider (optional)
 
-A developer can run Claude Code through OpenRouter with `./scripts/claude-or.sh`. Before doing so
-on this project, check that routing code and prompts through a third party is allowed for this work.
-See [docs/openrouter.md](docs/openrouter.md).
+A developer can run their own Claude Code sessions through OpenRouter (including zero data
+retention), Amazon Bedrock, Google Vertex or another provider, with
+`./scripts/claude-profile.sh <profile>` (`./scripts/claude-or.sh` for OpenRouter). The guardrails
+still apply. Before doing so on this project, check that sending code and prompts to that provider
+is allowed for this work. See [docs/choosing-a-model.md](docs/choosing-a-model.md).

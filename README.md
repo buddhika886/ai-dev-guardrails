@@ -58,7 +58,10 @@ with the real incidents behind them: [docs/why-these-rules.md](docs/why-these-ru
 
 ## Try it
 
-**You need:** [Claude Code](https://claude.com/claude-code), git, and Node 24.
+**You need:** [Claude Code](https://claude.com/claude-code), git, and Node 24. Claude Code itself is
+required, but the model behind it is your choice: a Claude subscription by default, or Claude
+through OpenRouter, AWS, Google or Azure, among others. See
+[docs/choosing-a-model.md](docs/choosing-a-model.md).
 
 1. On GitHub, choose **Use this template** to make your own copy, then clone it.
 2. Open the folder in Claude Code and type `/bootstrap`.
@@ -208,12 +211,32 @@ If your team already pays for Snyk, Socket, GitHub Code Security or similar, or 
 OWASP Dependency-Check, each can be added as an extra CI step alongside the free defaults. See
 "If you already have an account" in [docs/configuring-rules.md](docs/configuring-rules.md).
 
-### Running Claude Code through OpenRouter
+### Using a different model or provider
 
-Each developer can choose to run Claude Code through OpenRouter instead of a Claude subscription,
-with `./scripts/claude-or.sh`. Same Claude models, different billing. For client or regulated work,
-check first that routing code through a third party is allowed. See
-[docs/openrouter.md](docs/openrouter.md).
+Each developer can run their own Claude Code sessions through another provider without affecting
+anyone else, using a saved profile:
+
+```bash
+./scripts/claude-profile.sh openrouter   # or bedrock, vertex, openai, or one you make
+./scripts/claude-or.sh                   # shortcut for OpenRouter
+```
+
+**OpenRouter** gives the same Claude models with different billing, one place to see spending, and
+**zero data retention (ZDR)**: you can require that only providers who keep no copy of your code are
+used. **Amazon Bedrock and Google Vertex** keep your code within an existing cloud agreement. Other
+vendors' models (OpenAI, DeepSeek) also work through a gateway, but Anthropic does not support that
+and this project has not tested it.
+
+Whatever you choose, the guardrails still apply, because Claude Code enforces them, not the model:
+
+| Layer | Needs Claude Code? | Depends on the model? |
+| --- | --- | --- |
+| Written rules (`CLAUDE.md`) | Yes | Yes: how well they are followed varies |
+| Command guard and "always ask" rules | Yes | No |
+| Git hooks and CI | No: they also check code from Cursor, Copilot or a person | No |
+
+For client or regulated work, check first that sending code to that provider is allowed. Setup,
+ZDR, and the data questions to ask: [docs/choosing-a-model.md](docs/choosing-a-model.md).
 
 ---
 

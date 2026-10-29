@@ -48,6 +48,8 @@ run_cases "guardrail cases (scenario A)" \
   bash "$ROOT/tests/guardrail-cases.sh" "$WORK/acme-portal"
 run_cases "hook cases (scenario A)" \
   bash "$ROOT/tests/hook-cases.sh" "$WORK/acme-portal"
+run_cases "model profile cases (scenario A)" \
+  bash "$ROOT/tests/profile-cases.sh" "$WORK/acme-portal"
 
 run_suite "install: scenario B (plain library, no prod, no database, no bundle, no governance)" \
   bash "$ROOT/tests/install.sh" b "$WORK/sig-lib"

@@ -384,8 +384,10 @@ if head -1 README.md | grep -qxF "# $(node -p 'require("./package.json").name')"
 else
   t_fail "README.md is not the generated project README" "$(head -3 README.md)"
 fi
-for p in docs/configuring-rules.md docs/five-layers.md docs/why-these-rules.md docs/openrouter.md scripts/claude-or.sh \
-         .claude/openrouter.settings.json.example .github/dependabot.yml; do
+for p in docs/configuring-rules.md docs/five-layers.md docs/why-these-rules.md docs/choosing-a-model.md \
+         scripts/claude-profile.sh scripts/claude-or.sh .claude/profiles/openrouter.settings.json.example \
+         .claude/profiles/bedrock.settings.json.example .claude/profiles/vertex.settings.json.example \
+         .claude/profiles/openai.settings.json.example .github/dependabot.yml; do
   if [ -f "$p" ]; then t_pass "shipped on purpose: $p"; else t_fail "missing shipped file: $p"; fi
 done
 if grep -qF 'One-time GitHub setup' README.md && grep -qF 'Dependabot alerts' README.md; then
@@ -393,8 +395,9 @@ if grep -qF 'One-time GitHub setup' README.md && grep -qF 'Dependabot alerts' RE
 else
   t_fail "project README is missing the GitHub setup steps"
 fi
-if grep -qxF '.claude/openrouter.settings.json' .gitignore && ! grep -qxE 'DEVLOG.md|PROJECT-GUIDE.md' .gitignore; then
-  t_pass ".gitignore keeps the OpenRouter key out and drops the template's own entries"
+if grep -qxF '.claude/profiles/*.settings.json' .gitignore && grep -qxF '.claude/openrouter.settings.json' .gitignore \
+   && ! grep -qxE 'DEVLOG.md|PROJECT-GUIDE.md' .gitignore; then
+  t_pass ".gitignore keeps model-provider keys out and drops the template's own entries"
 else
   t_fail ".gitignore entries wrong" "$(cat .gitignore)"
 fi

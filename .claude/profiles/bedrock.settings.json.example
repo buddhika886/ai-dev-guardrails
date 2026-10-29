@@ -1,0 +1,10 @@
+{
+  "env": {
+    "CLAUDE_CODE_USE_BEDROCK": "1",
+    "AWS_PROFILE": "REPLACE-ME-aws-profile",
+    "AWS_REGION": "REPLACE-ME-aws-region",
+    "ANTHROPIC_DEFAULT_OPUS_MODEL": "REPLACE-ME-bedrock-opus-model-id",
+    "ANTHROPIC_DEFAULT_SONNET_MODEL": "REPLACE-ME-bedrock-sonnet-model-id",
+    "ANTHROPIC_DEFAULT_HAIKU_MODEL": "REPLACE-ME-bedrock-haiku-model-id"
+  }
+}

@@ -343,6 +343,25 @@ which this project's setup steps recommend switching on.
 
 ---
 
+## Model profiles
+
+**What it does.** A developer can run Claude Code through another provider (OpenRouter, Amazon
+Bedrock, Google Vertex and others) with `./scripts/claude-profile.sh <name>`. The profile applies to
+that one session; the launcher refuses a profile that git could commit, or one still holding
+placeholder values.
+
+**Why.** A profile holds an API key, and a key in a committed file is a leaked key. Applying it per
+session means plain `claude` always stays on the default, so nobody moves the team to another
+provider, or another bill, by accident. Choosing a provider also chooses who sees your code, which
+is why [choosing-a-model.md](choosing-a-model.md) starts with that question and explains zero data
+retention.
+
+**Common practice.** Keys live outside the repository, in a gitignored file or a secrets manager,
+with a committed example showing the shape. The guardrails themselves do not depend on the choice:
+Claude Code enforces them whatever model is behind it.
+
+---
+
 ## CI and the GitHub settings
 
 ### CI is the final word

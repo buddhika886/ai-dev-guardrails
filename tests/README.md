@@ -33,6 +33,7 @@ directory outside the repo, because the guardrail scripts resolve their root wit
 | `values/scenario-b.json`| Sparse project: no framework, no production, no database, no bundle, no governance. |
 | `guardrail-cases.sh`    | One violation per check, plus every fail-closed path (scenario A).        |
 | `hook-cases.sh`         | The bash guard (block, ask, allow) and Stop hook, including degraded environments. |
+| `profile-cases.sh`      | The model-profile launcher: its refusals, and the session it starts.    |
 | `sparse-cases.sh`       | Empty-token behaviour: skips must be declared, not silent (scenario B).   |
 | `lib/assert.sh`         | Shared assertions and the reset-between-cases helper.                     |
 | `lib/fill.mjs`          | Literal token substitution, standing in for bootstrap's edits.            |

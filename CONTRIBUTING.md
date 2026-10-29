@@ -92,7 +92,8 @@ CI runs the same, plus a full-history secret scan and the sign-off check.
 | `.template/security/`, `.template/agents/` | Placeholders for tiers not built yet |
 | `docs/` | Documentation, shipped into generated projects too |
 | `scripts/template-integrity.sh` | Checks every `{{TOKEN}}` is in the bootstrap token table and vice versa |
-| `scripts/claude-or.sh` | The optional OpenRouter launcher (shipped) |
+| `scripts/claude-profile.sh`, `scripts/claude-or.sh` | The optional model-profile launcher and its OpenRouter shortcut (shipped) |
+| `.claude/profiles/` | Example model profiles (shipped; real profiles are gitignored) |
 | `tests/` | The behaviour suite ([tests/README.md](tests/README.md)) |
 
 `.template/` and the template's own files (this one included) are removed from a project at the end
