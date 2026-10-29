@@ -49,8 +49,9 @@ regexes = [
   '''(?i)localhost(:\d+)?''',
   '''127\.0\.0\.1''',
 ]
+# Single files only, never a directory: a real key placed in a skipped directory is invisible to
+# both the commit hook and CI. Clear a false positive with the narrowest entry that fixes it.
 paths = [
   '''\.env\.example$''',
   '''\.dev\.vars\.example$''',
-  '''(^|/)docs/''',
 ]
