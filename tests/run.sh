@@ -60,6 +60,9 @@ run_cases "sparse cases (scenario B)" \
 run_suite "gitleaks config cases (this repo's own .gitleaks.toml)" \
   bash "$ROOT/tests/gitleaks-config-cases.sh"
 
+run_suite "controls doc cases (docs/security-controls.md lists every control)" \
+  bash "$ROOT/tests/controls-doc-cases.sh"
+
 echo
 if [ "$failed" -ne 0 ]; then
   echo "TEMPLATE BEHAVIOUR TESTS FAILED: $failed suite(s)."

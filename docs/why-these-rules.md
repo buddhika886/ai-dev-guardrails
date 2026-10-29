@@ -2,7 +2,8 @@
 
 Every rule in this project is there because of something that keeps happening to real teams. This
 page explains each one in plain language: what it does, why it exists, and how it compares with
-common practice. For how to change a rule, see [configuring-rules.md](configuring-rules.md).
+common practice. For how to change a rule, see [configuring-rules.md](configuring-rules.md). For
+the complete list of controls in one table per layer, see [security-controls.md](security-controls.md).
 
 Most of these rules are not new ideas. They are the habits careful teams already follow, written
 down and checked automatically, so they still hold on a busy day or when an AI assistant is doing

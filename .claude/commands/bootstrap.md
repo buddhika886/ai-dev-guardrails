@@ -84,7 +84,7 @@ Do these in order. Show the user what you are doing at each step.
    - in `.gitignore`, the template-only entries `DEVLOG.md` and `PROJECT-GUIDE.md` and the comment
      lines directly above each
    `LICENSE` is handled in Step 5. Keep `docs/five-layers.md`, `docs/configuring-rules.md`,
-   `docs/why-these-rules.md`, `docs/choosing-a-model.md`, `scripts/claude-profile.sh`, `scripts/claude-or.sh`
+   `docs/why-these-rules.md`, `docs/security-controls.md`, `docs/choosing-a-model.md`, `scripts/claude-profile.sh`, `scripts/claude-or.sh`
    and the `.claude/profiles/*.settings.json.example` files: they are project documentation and an
    optional developer tool (running Claude Code with another provider or model), shipped on purpose.
 1. **Copy core.** Copy every file from `.template/core/` to its destination:

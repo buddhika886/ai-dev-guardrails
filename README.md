@@ -151,7 +151,9 @@ without printing it (`[ -n "$API_SECRET" ] && echo set`), running tests, buildin
 
 Checks 1 to 12 live in `scripts/ci-guardrails.sh`; the names in the right-hand column are settings
 at the top of that file unless another file is named. For why each one exists and how it compares
-with common practice, see [docs/why-these-rules.md](docs/why-these-rules.md).
+with common practice, see [docs/why-these-rules.md](docs/why-these-rules.md). For the complete
+list of every control (where it is enforced, when it runs, what proves it works and where it stops),
+see [docs/security-controls.md](docs/security-controls.md).
 
 ---
 

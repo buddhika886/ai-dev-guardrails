@@ -385,6 +385,7 @@ else
   t_fail "README.md is not the generated project README" "$(head -3 README.md)"
 fi
 for p in docs/configuring-rules.md docs/five-layers.md docs/why-these-rules.md docs/choosing-a-model.md \
+         docs/security-controls.md \
          scripts/claude-profile.sh scripts/claude-or.sh .claude/profiles/openrouter.settings.json.example \
          .claude/profiles/bedrock.settings.json.example .claude/profiles/vertex.settings.json.example \
          .claude/profiles/openai.settings.json.example .github/dependabot.yml; do

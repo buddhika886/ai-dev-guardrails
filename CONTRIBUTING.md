@@ -120,6 +120,9 @@ command guard that let a long command through unchecked.
 **Keep the install test in step with bootstrap.** `tests/install.sh` mirrors
 `.claude/commands/bootstrap.md` step for step. Change both in the same pull request.
 
+**Keep the controls list in step.** A new block, prompt, check, scan, hook, CI job or policy setting
+needs a row in `docs/security-controls.md`; `tests/controls-doc-cases.sh` fails until it has one.
+
 **Keep the token table in step.** If you add or rename a `{{TOKEN}}`, update the table in
 `bootstrap.md`; `scripts/template-integrity.sh` fails otherwise.
 
