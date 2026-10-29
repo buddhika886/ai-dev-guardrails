@@ -91,6 +91,9 @@ const name = process.argv[2]
 fs.writeFileSync("package.json", JSON.stringify({ name, private: true, version: "0.1.0", scripts: frag.scripts }, null, 2) + "\n")
 ' "$T/lang/ts/package-scripts.json" "$(node -e 'process.stdout.write(JSON.parse(require("fs").readFileSync(process.argv[1],"utf8")).PROJECT_NAME)' "$VALUES")"
 # No lockfile yet, so create one. The fixture has no dependencies, so this needs no network.
+# Bootstrap step 4.2 also installs @biomejs/biome at the version biome.json names. That needs the
+# registry, and this suite runs offline, so it is the one bootstrap step not mirrored here; the
+# lint hook's behaviour with Biome present is covered by the template's own pre-commit run.
 [ -f package-lock.json ] || npm install --package-lock-only --ignore-scripts --offline --no-audit --no-fund >/dev/null
 
 GOVERNANCE=$(value GOVERNANCE_ENABLED)

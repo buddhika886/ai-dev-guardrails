@@ -44,6 +44,8 @@ printf '\nconst q = (t: string) => sql.unsafe(`select ${t}`)\n' >> src/app/api/s
 expect_reject "sql.unsafe( in the api dir is caught" "non-parameterised SQL"
 
 echo "── [4] no browser storage in client code"
+mkdir -p src/components; printf 'export const x = localStorage.getItem("t")\n' > src/components/x.ts
+expect_reject "browser storage in a second client dir is caught" "browser storage in src/app src/components"
 printf '\nlocalStorage.setItem("token", "abc")\n' >> src/app/page.tsx
 expect_reject "localStorage is caught" "browser storage"
 printf '\ndocument.cookie = "session=abc"\n' >> src/app/page.tsx

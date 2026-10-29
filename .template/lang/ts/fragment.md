@@ -7,7 +7,7 @@ tokens in the core files; the files listed are copied into the project.
 
 | Source (this dir)      | Destination            | Notes                                              |
 | ---------------------- | ---------------------- | -------------------------------------------------- |
-| `biome.json`           | `biome.json`           | Strict defaults: recommended + security rules on.  |
+| `biome.json`           | `biome.json`           | Strict defaults: recommended + security rules on. Bootstrap installs `@biomejs/biome` pinned to the version in its `$schema` URL; to move to a newer Biome, run `npx biome migrate` in a reviewed change and bump the pin and its `allowScripts` entry together. |
 | `.nvmrc`               | `.nvmrc`               | Pins Node 24 (ships npm 11.10+, which the cooldown needs). |
 | `.npmrc`               | `.npmrc`               | Dependency policy: 7-day release cooldown, registry-only dependencies, reviewed install scripts. Check [12] enforces it. |
 | `package-scripts.json` | merged into `package.json` | `scripts` block; `build` is a hand-filled placeholder. |

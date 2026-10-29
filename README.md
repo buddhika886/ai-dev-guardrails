@@ -114,7 +114,9 @@ required; the model behind it is your choice (see [choosing a model](docs/choosi
    protections are repository settings that no file can switch on.
 
 From then on, the kit's own files are gone and your project carries only what it needs: the rules,
-the guard, the checks, and a `docs/` folder explaining how to change them.
+the guard, the checks, and a `docs/` folder explaining how to change them. The kit does not create
+your app: run bootstrap on an existing project, or on an empty one and add the app afterwards (for
+example `npx create-next-app@latest .`).
 
 Cloned this repository directly, or downloaded it as a ZIP, instead of using the template button?
 Bootstrap notices and offers to sort it out: a ZIP has no git repository yet, so it offers to create
