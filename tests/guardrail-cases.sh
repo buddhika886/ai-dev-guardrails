@@ -30,6 +30,9 @@ expect_reject "a server-secret name in client code is caught" "server-secret nam
 printf '\nconst s = process.env.STRIPE_SECRET_KEY\n' >> src/app/page.tsx
 expect_reject "a second server-secret name is caught" "server-secret name(s)"
 
+portable_sed "s|^SECRET_VAR_NAMES='.*'|SECRET_VAR_NAMES=''|" scripts/ci-guardrails.sh
+expect_accept "an empty secret-name list is a declared skip, not an empty regex" "no SECRET_VAR_NAMES configured"
+
 echo "── [3] parameterised SQL only, across every SERVER_DIRS path"
 # SC2016: the un-expanded ${id} is the point. It plants a TypeScript template-literal interpolation,
 # which is precisely the string-built SQL the check exists to reject.

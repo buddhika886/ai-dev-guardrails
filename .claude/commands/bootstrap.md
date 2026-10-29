@@ -8,69 +8,194 @@ You are turning this template into a working project. Follow these steps in orde
 around the enforcement files' content: you fill CONFIG values and copy files, you never rewrite a
 check to make it pass. If any step errors, STOP, report exactly what failed, and wait.
 
-## Step 1: Idempotency check (do this first, before anything else)
+## Step 1: Where are we? (do this first, before anything else)
 
-If `.template/` does **not** exist, this repo is already bootstrapped. Say so, point the user at
-`docs/five-layers.md` and `docs/configuring-rules.md`, and STOP. Do not proceed.
+Run these checks in order and act on the first that applies. Do not run anything else yet.
 
-If `.template/` exists, continue.
+1. **Already bootstrapped.** If `.template/` does **not** exist, this repo is already a project. Say
+   so, point the user at `docs/five-layers.md` and `docs/configuring-rules.md`, and STOP.
+2. **No git repository.** If `git rev-parse --git-dir` fails, the kit was downloaded as a ZIP. Say:
+   "This folder is not a git repository yet (the kit was downloaded rather than cloned). The
+   guardrails need one. Shall I run `git init -b main`?" Wait. If yes, run it and continue; if no,
+   STOP.
+3. **A direct clone of the kit.** If `git remote get-url origin` names `ai-dev-guardrails`, this is
+   a clone of the template rather than a repository made from it. Say: "This is a clone of the
+   kit itself, so `origin` points at the kit's repository and your first push would go to the
+   wrong place. Shall I remove the `origin` remote? You add your own repository as `origin` when
+   you are ready to push. (Using GitHub's **Use this template** button avoids this and gives a
+   clean history.)" Wait. If yes, run `git remote remove origin`; either way, continue.
+4. Otherwise continue.
 
 ## Step 2: The offer (say exactly this, then WAIT)
 
-Print these two lines verbatim and then stop and wait for the user's reply. Do not run anything yet.
+Print these lines verbatim and then stop and wait for the user's reply. Do not run anything yet.
 
-> This repo is the ai-dev-guardrails template. I can bootstrap it into your project: I'll ask five
-> short questions, fill in all the guardrails, verify they pass, then stop for your consent before
+> This repo is the ai-dev-guardrails template. I can bootstrap it into your project. I'll walk you
+> through a short set of questions, one at a time, each with a recommended answer if you are
+> unsure; then I'll fill in all the guardrails, verify they pass, and stop for your consent before
 > committing anything.
 > Shall I start? This edits files in place and deletes `.template/` at the end; nothing is committed
 > or pushed without your explicit go-ahead.
 
 Only continue once the user consents. If they decline, STOP.
 
-## Step 3: The five-question interview
+## Step 3: The guided interview
 
-Ask these five questions. Ask them one at a time or as a group, but collect all five answers before
-installing. Also confirm the **project name** (default: this directory's name) at the same time.
+**How to run it.** Ask every question below with the `AskUserQuestion` tool, one question per call,
+in exactly this order. Each call carries the question text (the question and the one-line "why"),
+the options with their descriptions (the examples), and `multiSelect` where marked. Never present
+the questions as a list to answer in one go, never skip, merge, reorder or add a question, and
+never guess an answer. If the user volunteers answers to later questions, record them, but still
+present each remaining question (with the volunteered answer as the first option) so nothing is
+assumed. If `AskUserQuestion` is not available in this session, ask the same questions one at a
+time in text, with the options numbered, and wait for each answer.
 
-1. **Stack.** What language and framework? (e.g. TypeScript + Next.js, TypeScript + Vite.)
-   - For T1, only **TypeScript** is supported. If the answer is **Python** or **React Native**, say:
-     "Those language fragments arrive in the next template release. I can bootstrap a TypeScript-only
-     project now, or stop and wait for that release." Then do only what the user chooses.
-   - From the framework, read `{{PUBLIC_VAR_PREFIX}}` and `{{BUNDLE_DIR}}` off the table in
-     `.template/lang/ts/fragment.md`. Present that table if the framework is unclear or "none yet".
-2. **Repo shape.** Single package or monorepo? If monorepo, what are the package paths? Which
-   directories hold client code and which hold server/edge code? Where do database migrations live
-   (or none)?
-3. **Data sensitivity.** Does the project handle personal or regulated data (PII, financial, health)?
-   - **Yes** → arm the security tier (`{{IF_SECURITY_TIER}}` lines are kept) and ask for the schema
-     dump command and dump file if there is a database.
-   - **No** → leave the security tier dormant (`{{IF_SECURITY_TIER}}` lines dropped); it can be added
-     later.
-4. **Production.** What is the production host / connection, the approved path for prod changes, and
-   the names of env vars that carry prod credentials or targets? If there is no production yet,
-   answer **"none yet"** and the prod patterns are left empty (the guard still blocks force-push,
-   destructive git and secret disclosure, still asks before every commit, push and deploy, and
-   prepare-versus-execute still applies).
-5. **Tiers.** Which tiers beyond core? Security (auto-armed by Q3, or force on), governance, or
-   core-only.
-   - **Governance** is built: an evidence log, a decision record (settled decisions, deviations,
-     open questions), phase briefs and a PR template, kept honest by guardrail check [11]. Recommend
-     it for client work, regulated work, or anything that will be audited or handed over.
-   - **Security** ships only its placeholder for now, so selecting it keeps its `CLAUDE.md` pointers
-     and records the choice; the tier files arrive in a later release.
+The first option of every question is a safe default. A user who picks the first option every time
+ends up with a working, safe project; that is the design, not an accident. Every option list ends
+with an "Other" that the tool adds itself, so free text (a path, a name) always has a way in.
 
-Also capture the **source-of-truth documents** the project's CLAUDE.md should point at (PRD, runbook,
-spec), the **language/spelling** convention (default: British English), the **guardrail owners**
-(the GitHub handle or team, such as `@octocat` or `@acme/platform`, whose review every change to the
-enforcement files needs; default: the user's own handle; written into `.github/CODEOWNERS`), and the
-**licence**:
+Before the first question, run `basename "$PWD"` and `gh api user -q .login 2>/dev/null || true`
+so the defaults below can be filled in. Read `.template/lang/ts/fragment.md` for the prefix and
+bundle table.
 
-- **No licence file** (recommended for client and internal work): the code stays all rights
-  reserved, which is the right default for anything not being open-sourced.
-- **MIT**, with the name of the copyright holder (a person, a company, or "<name> and
-  contributors").
+### Basics
+
+**B1. Project name.** "What is the project called? This names the README and the rules file."
+- `<directory name>` (recommended): the folder you are in
+- Other: type a name
+
+**B2. Spelling.** "Which spelling should the written rules and docs use?"
+- British English (recommended): organisation, optimise
+- US English: organization, optimize
+
+### Q1. Stack
+
+**Q1a. Framework.** "What is the project built with? Only TypeScript is supported in this release;
+Python and React Native come later. The framework decides which settings are allowed to reach the
+browser and where the built app lands."
+- Next.js: `NEXT_PUBLIC_` settings reach the browser
+- Vite-based (React, SvelteKit): `VITE_` settings reach the browser; built app in `dist`
+- Astro or Remix: I'll ask which next
+- Plain TypeScript, a library, or nothing yet (recommended if unsure): no browser settings check;
+  you can add one later
+
+If the user answers Python or React Native through Other, say: "Those language fragments arrive in
+the next template release. I can bootstrap a TypeScript-only project now, or stop and wait for that
+release." Then do only what the user chooses.
+
+**Q1b. Only if Next.js.** "How is it built? This decides where the kit scans for secrets that
+should never ship."
+- Static export (recommended if unsure): built files land in `out`, and the kit scans them
+- Server-rendered: there is no static output to scan
+
+**Q1c. Only if Astro or Remix.**
+- Astro: `PUBLIC_` settings reach the browser; built app in `dist`
+- Remix: no public prefix; built app in `build/client`
+
+Derive `{{PUBLIC_VAR_PREFIX}}` and `{{BUNDLE_DIR}}` from the fragment table.
+
+### Q2. Repo shape
+
+**Q2a. Layout.** "Is this one package or several? The kit needs to know where browser code and
+server code live, because different rules apply to each."
+- Single package (recommended if unsure): one `package.json` at the root
+- Monorepo: several packages; type the package paths, for example `apps/web packages/api`
+
+**Q2b. Browser code.** "Which folder holds the code that runs in the browser? The kit checks that
+no secrets and no browser storage end up there." Options: the framework's usual folder first
+(`src/app src/components` for Next.js, `src` for Vite and Astro, `app` for Remix), then
+`src/client`, then Other.
+
+**Q2c. Server code.** "Which folders hold code that runs on the server or at the edge? The kit
+checks that database queries there are written safely." Options: the framework's usual folder first
+(`src/server` for Next.js, `src/server` for Vite, `src/pages/api` for Astro, `app/routes` for
+Remix), then `server`, then Other (space-separated paths).
+
+**Q2d. Database migrations.** "Where do database migrations live? The kit stops an old migration
+from being edited, which would make databases drift apart."
+- No database (recommended if unsure): the migration check is switched off and says so
+- `prisma/migrations`
+- `db/migrations`
+
+### Q3. Data
+
+**Q3a. Sensitivity.** "Will the project handle personal or regulated data, such as names, emails,
+payments or health records? This switches on the stricter security rules and records the choice
+for audits."
+- No: the security tier stays dormant; it can be added later
+- Yes: the security tier is armed (its files arrive in a later release; the choice is recorded)
+
+**Q3b. Only if Q3a is yes and Q2d named a migrations folder.** "What command prints the database
+schema, and where should the committed copy live? The kit compares the two so a change made by
+hand shows up in review."
+- Skip for now (recommended if unsure): the schema check is switched off and says so
+- Prisma: `npx prisma migrate diff --from-empty --to-schema-datamodel prisma/schema.prisma --script`, saved to `db/schema.sql`
+- Other: type the command and the file path
+
+### Q4. Production
+
+**Q4a. Production.** "Is there a live production system yet? The kit blocks the AI from touching
+it from your computer, and asks before every deploy either way."
+- None yet (recommended if unsure): deploys still ask; add the host later in
+  `scripts/claude-bash-guard.sh`
+- Yes, describe it: type the production host or connection (for example `db.prod.example.com`),
+  how production changes are meant to happen (for example "deploys run from GitHub only"), and the
+  names of any settings that point at production (for example `PROD_DATABASE_URL`)
+
+**Q4b. Secret settings.** "Which settings must never be shown? The kit blocks the AI from printing
+these into the chat and checks they never reach browser code or the built app. Anything named with
+SECRET, TOKEN, PASSWORD, API_KEY or CREDENTIALS is already covered; name the others."
+- None beyond the usual names (recommended if unsure): the built-in patterns cover you; add names
+  later in `docs/configuring-rules.md`
+- Typical set: `DATABASE_URL SESSION_SECRET STRIPE_SECRET_KEY`
+- Other: type the names, separated by spaces
+
+**Q4c. Public setting.** Only if Q1 gave a public prefix. "Which setting is allowed to be public?
+Anything starting with `<prefix>` is sent to every visitor's browser, so the kit only allows the
+ones you name."
+- None yet (recommended if unsure): the kit fails if any public setting appears, until you add it
+- `<prefix>APP_URL`: the site's own address, the usual first one
+- Other: type the names, separated by spaces
+
+### Q5. Tiers
+
+**Q5. Extras** (`multiSelect`). "Which records do you want alongside the code? Choose any; none is
+fine."
+- Governance records (recommended for client, regulated or audited work): an evidence log where
+  "done" needs proof, a decision record where every exception has a cost, an end date and an owner,
+  phase briefs, and a pull request template
+- Security tier: switched on already if you said yes to personal data; choosing it here records the
+  choice (its files arrive in a later release)
+- Core only: just the guardrails
+
+### Ownership and licence
+
+**O1. Source documents.** "Are there documents the AI should treat as the source of truth, such as
+a spec, a PRD or a runbook? They are linked from the rules file so the AI reads them first."
+- None yet (recommended if unsure): the rules file says so; add links later
+- Other: type paths or links
+
+**O2. Guardrail owners.** "Who must review any change to the safety rules? This is written into
+`.github/CODEOWNERS`, so no one can weaken a guardrail without their approval."
+- `@<handle from gh>` (recommended): you
+- Other: a GitHub handle or team, for example `@acme/platform`
+
+**O3. Licence.** "Should the code carry an open-source licence? For client or internal work, no
+licence file is the safe default: the code stays all rights reserved."
+- No licence file (recommended for client and internal work)
+- MIT: open source; type the copyright holder, for example "Jane Doe and contributors"
 
 The template's own `LICENSE` names the template's author, so it is never kept as it is.
+
+### Confirm
+
+Show every answer in one table (question, answer, and the token or file it fills), then ask one
+last question with `AskUserQuestion`: "Install the guardrails with these answers?"
+- Install now
+- Change an answer: ask which, re-ask that one question, show the table again
+- Stop: nothing has been changed yet
+
+Only continue to Step 4 on "Install now".
 
 ## Step 4: Install algorithm (conservative, step by step)
 
@@ -162,10 +287,10 @@ that fills it. Empty-allowed tokens are marked.
 
 | Token                     | Source question / derivation                                             | Empty allowed |
 | ------------------------- | ------------------------------------------------------------------------ | ------------- |
-| `{{PROJECT_NAME}}`        | Directory name, confirmed at Step 3                                      | no            |
-| `{{LANGUAGE_SPELLING}}`   | Step 3 convention (default British English)                              | no            |
-| `{{SOURCE_OF_TRUTH_DOCS}}`| Step 3 source-of-truth docs list                                         | no            |
-| `{{LOCAL_TOOLCHAIN}}`     | Q1 stack (e.g. "Node 24 + npm")                                          | no            |
+| `{{PROJECT_NAME}}`        | B1                                                                       | no            |
+| `{{LANGUAGE_SPELLING}}`   | B2                                                                       | no            |
+| `{{SOURCE_OF_TRUTH_DOCS}}`| O1                                                                       | no            |
+| `{{LOCAL_TOOLCHAIN}}`     | Q1a stack (e.g. "Node 24 + npm")                                         | no            |
 | `{{LANG_LINT_GLOB}}`      | Q1 → `fragment.md` token values                                          | no            |
 | `{{LANG_LINT_CMD}}`       | Q1 → `fragment.md` token values                                          | no            |
 | `{{UNSAFE_SQL}}`          | Q1 → `fragment.md` default                                               | no            |
@@ -177,11 +302,11 @@ that fills it. Empty-allowed tokens are marked.
 | `{{MIGRATIONS_DIR}}`      | Q2 repo shape / Q3 (migrations folder)                                   | yes (no DB)   |
 | `{{SECRET_FILE_PATTERNS}}`| Q3 data + defaults (`.csv` left out; noisy)                              | no            |
 | `{{ALLOWED_TRACKED}}`     | Derived default (`.env.example`, `.dev.vars.example`)                    | no            |
-| `{{SECRET_FILES}}`        | Q1/Q3 (gitignored secret files, for CLAUDE.md prose)                     | no            |
-| `{{PUBLIC_VAR}}`          | Q1/Q4 (the one legitimately public variable)                             | no            |
-| `{{PUBLIC_VAR_ALLOWLIST}}`| Q1/Q4 (allowlisted public var names, space-separated)                    | yes           |
-| `{{SECRET_VAR_NAMES}}`    | Q4 (server secret env-var names, space-separated)                        | no            |
-| `{{BUNDLE_LEAK_PATTERNS}}`| Q4/Q3 (secret-like strings that must not ship)                           | no            |
+| `{{SECRET_FILES}}`        | Q1/Q3a (gitignored secret files, for CLAUDE.md prose; default `.env`)    | no            |
+| `{{PUBLIC_VAR}}`          | Q4c (the legitimately public variable, or "(none yet)")                   | no            |
+| `{{PUBLIC_VAR_ALLOWLIST}}`| Q4c (allowlisted public var names, space-separated)                      | yes           |
+| `{{SECRET_VAR_NAMES}}`    | Q4b (extra secret names, space-separated; may be empty: shape patterns still apply) | no            |
+| `{{BUNDLE_LEAK_PATTERNS}}`| Q4b names joined with `\|`, plus the default shapes `sk_live_\|sk-or-v1-\|AKIA[0-9A-Z]{16}\|BEGIN [A-Z ]*PRIVATE KEY` | no            |
 | `{{SCHEMA_DUMP_CMD}}`     | Q3 (command that prints the schema)                                      | yes (no DB)   |
 | `{{SCHEMA_DUMP_FILE}}`    | Q3 (committed dump path)                                                 | yes (no DB)   |
 | `{{PROD_HOST}}`           | Q4 (prod host / connection)                                              | no*           |
@@ -189,7 +314,7 @@ that fills it. Empty-allowed tokens are marked.
 | `{{PROD_GUARD_PATTERNS}}` | Q4 (host/verb patterns for the bash guard)                               | yes ("none yet") |
 | `{{PROD_ENV_VAR_NAMES}}`  | Q4 (prod-bearing env-var names)                                          | yes ("none yet") |
 | `{{GOVERNANCE_ENABLED}}`  | Q5 (tier): `on` if governance is selected, otherwise `off`               | no            |
-| `{{CODEOWNERS}}`          | Step 3 guardrail owners (GitHub handle or team, for `.github/CODEOWNERS`) | no            |
+| `{{CODEOWNERS}}`          | O2 (GitHub handle or team, for `.github/CODEOWNERS`)                     | no            |
 | `{{BOOTSTRAP_DATE}}`      | Today's date, ISO (YYYY-MM-DD), for the governance records               | no            |
 | `{{IF_SECURITY_TIER}}`    | Q3 (data) and/or Q5 (tier): line kept if on, dropped if off              | line marker   |
 | `{{IF_GOVERNANCE_TIER}}`  | Q5 (tier): line kept if on, dropped if off                               | line marker   |
@@ -204,7 +329,7 @@ empty. Prod safety by process still applies.
    one entirely).
 2. Place the filled `README.project.md` content as the new `README.md`. Tell the user to add their
    own project description at the top, where the file says so.
-3. **Licence**, per the Step 3 answer: for **no licence file**, delete `LICENSE`; for **MIT**,
+3. **Licence**, per the O3 answer: for **no licence file**, delete `LICENSE`; for **MIT**,
    replace the copyright line in `LICENSE` with `Copyright (c) <current year> <holder>` and keep
    the rest of the text unchanged.
 4. Delete `.template/` and `.claude/commands/bootstrap.md` (this command; it has done its job).
