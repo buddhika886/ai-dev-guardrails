@@ -94,18 +94,33 @@ it must catch its problem, and it must not get in the way of normal work.
 You need [Claude Code](https://claude.com/claude-code), git and Node 24. Claude Code itself is
 required; the model behind it is your choice (see [choosing a model](docs/choosing-a-model.md)).
 
-1. On GitHub, choose **Use this template** to make your own copy, then clone it.
-2. Open the folder in Claude Code, at the repository root, and type `/bootstrap`.
-3. Answer a few questions: what language and framework, where your code lives, whether the project
+1. On GitHub, choose **Use this template** to make your own copy, then clone it to your computer.
+2. In a terminal, go to the folder you cloned (the repository root) and start Claude Code:
+
+   ```bash
+   cd your-project
+   claude
+   ```
+
+3. At the Claude Code prompt, type `/bootstrap`. It is a Claude Code command, not a shell
+   command: it will not work in the terminal. Claude Code prints what it is about to do and waits
+   for your yes.
+4. Answer a few questions: what language and framework, where your code lives, whether the project
    handles personal or regulated data, what production looks like ("none yet" is fine), who reviews
    changes to the guardrails, and whether you want the governance records (below).
-4. The kit sets everything up, runs every check until it passes, and then **stops and asks** before
+5. The kit sets everything up, runs every check until it passes, and then **stops and asks** before
    committing. Nothing is committed or pushed without your say-so.
-5. If the project is on GitHub, follow the short "One-time GitHub setup" in your new README. A few
+6. If the project is on GitHub, follow the short "One-time GitHub setup" in your new README. A few
    protections are repository settings that no file can switch on.
 
 From then on, the kit's own files are gone and your project carries only what it needs: the rules,
 the guard, the checks, and a `docs/` folder explaining how to change them.
+
+Cloned this repository directly, or downloaded it as a ZIP, instead of using the template button?
+Bootstrap notices and offers to sort it out: a ZIP has no git repository yet, so it offers to create
+one; a direct clone's `origin` still points at this kit, so your first push would go to the wrong
+repository, and it offers to remove that remote (you add your own repository as `origin` when you
+are ready to push).
 
 ---
 

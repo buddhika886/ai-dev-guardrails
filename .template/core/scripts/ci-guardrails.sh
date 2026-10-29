@@ -139,9 +139,14 @@ if [ -n "$PUBLIC_VAR_PREFIX" ]; then
   allow=$(printf '%s\n' $PUBLIC_VAR_ALLOWLIST)
   pub=$(grep -rhoE "${PUBLIC_VAR_PREFIX}[A-Z0-9_]+" "$CLIENT_DIR" 2>/dev/null | sort -u | grep -vxF "$allow" || true)
   if [ -n "$pub" ]; then fail "disallowed public var(s) in $CLIENT_DIR:"; echo "$pub" | sed 's/^/      /'; else ok "only allowlisted public vars"; fi
-  names=$(printf '%s' "$SECRET_VAR_NAMES" | tr ' ' '|')
-  sec=$(grep -rnE "$names" "$CLIENT_DIR" 2>/dev/null || true)
-  if [ -n "$sec" ]; then fail "server-secret name(s) in $CLIENT_DIR:"; echo "$sec" | sed 's/^/      /'; else ok "no server-secret names in $CLIENT_DIR"; fi
+  # An empty name list must not become an empty regex, which matches every line.
+  if [ -z "${SECRET_VAR_NAMES// /}" ]; then
+    skip_note "no SECRET_VAR_NAMES configured; the guard's name-shape patterns still apply"
+  else
+    names=$(printf '%s' "$SECRET_VAR_NAMES" | tr ' ' '|')
+    sec=$(grep -rnE "$names" "$CLIENT_DIR" 2>/dev/null || true)
+    if [ -n "$sec" ]; then fail "server-secret name(s) in $CLIENT_DIR:"; echo "$sec" | sed 's/^/      /'; else ok "no server-secret names in $CLIENT_DIR"; fi
+  fi
 else
   skipped "[2] Public-env and client-secret scan" "no PUBLIC_VAR_PREFIX configured"
 fi
