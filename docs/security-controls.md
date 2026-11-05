@@ -48,6 +48,7 @@ model is behind Claude Code. **Proven by:** `hook-cases`, `sparse-cases`.
 | `DEPENDENCY_PATTERNS` | Ask | `npm install <name>`, `npm add`, `pnpm add`, `yarn add`, `bun add`, `bun install <name>`, `pnpm dlx`, `yarn dlx`, `bunx`, `npm approve-scripts` |
 | `ENFORCEMENT_WRITE` | Ask | A shell command that rewrites a guardrail file (`sed -i`, `perl -i`, a redirect, `tee`, `cp`, `mv`, `rm`, `truncate`, `chmod`, `install`, `ln` onto the guard, the checks, the Stop hook, `lefthook.yml`, the CI workflow, `CODEOWNERS`, `.gitleaks.toml`, `.claude/settings.json`, `CLAUDE.md` or `.npmrc`). Reading, running or diffing them is not asked about |
 | No payload | Block | The guard was called without a command to inspect (fails closed) |
+| Misconfigured pattern | Block | A filled pattern that is not a valid regex, or a name list that is not plain identifiers, blocks every command with a "misconfigured" reason until it is fixed. Otherwise an invalid pattern would make grep exit 2 and the check it feeds would silently vanish |
 | Unreadable payload | Block or Ask | No JSON parser, or malformed input: the patterns are matched against the raw payload instead of trusting an empty command |
 | Long commands | Block or Ask | A match is never lost on a long, multi-line command (matching reads the whole command, never a pipe that can be cut short) |
 
@@ -84,6 +85,7 @@ of each AI turn (fast mode). Fast mode skips checks 6 and 7. A check that does n
 
 | # | Check | Settings | Skipped when |
 | --- | --- | --- | --- |
+| 0 | Configuration is valid: every filled pattern parses, name lists are plain identifiers, every configured directory exists. A grep error anywhere below (exit 2) is reported as a failure, never read as "no match" | All CONFIG values | Never |
 | 1 | No confidential files in git | `SECRET_FILE_PATTERNS`, `ALLOWED_TRACKED` | Never |
 | 2 | Only approved public variables reach the browser; no server secret names in client code | `PUBLIC_VAR_PREFIX`, `PUBLIC_VAR_ALLOWLIST`, `SECRET_VAR_NAMES`, `CLIENT_DIR` | No public prefix |
 | 3 | Database queries are parameterised | `UNSAFE_SQL`, `SERVER_DIRS` | Never |

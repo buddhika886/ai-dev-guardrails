@@ -137,6 +137,30 @@ SECRET_CLIS="${B}(op[[:space:]]+(read|inject|item[[:space:]]+get)|doppler[[:spac
 
 payload=$(cat)
 
+# The filled values are matched with grep -E below. An invalid pattern makes grep exit 2, and in a
+# test-then-match chain that reads as "no match": the check it feeds disappears with
+# only a line on stderr. So every filled pattern is tried once here, and a bad one blocks every
+# command until it is fixed. A loud, obvious failure beats a guard that has quietly gone blind.
+for v in PROD_GUARD_PATTERNS PROD_ENV_VAR_NAMES SECRET_VAR_NAMES; do
+  val="${!v}"
+  [ -z "$val" ] && continue
+  case "$v" in
+    *_NAMES)
+      # Space-separated identifiers only: they are joined with | into a regex, and a name is never a
+      # quote, a bracket or a shell metacharacter.
+      if ! grep -qE '^[A-Za-z_][A-Za-z0-9_]*( +[A-Za-z_][A-Za-z0-9_]*)* *$' <<<"$val"; then
+        echo "BLOCKED: the bash guard is misconfigured: $v must be space-separated variable names (got: $val). Fix scripts/claude-bash-guard.sh; every command is blocked until it is valid." >&2
+        exit 2
+      fi ;;
+    *)
+      grep -qE "$val" <<<"" 2>/dev/null; rc=$?
+      if [ "$rc" -ge 2 ]; then
+        echo "BLOCKED: the bash guard is misconfigured: $v is not a valid extended regex. Fix scripts/claude-bash-guard.sh; every command is blocked until it is valid." >&2
+        exit 2
+      fi ;;
+  esac
+done
+
 # No payload means the guard was invoked outside the hook contract and cannot see what it is being
 # asked to approve. Block: a loud, obvious failure beats a silent hole.
 if [ -z "$payload" ]; then

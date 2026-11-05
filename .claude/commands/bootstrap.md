@@ -285,6 +285,21 @@ Do these in order. Show the user what you are doing at each step.
    with `scripts/template-integrity.sh`). Leave a value empty only where the table and the check
    allow it (e.g. `{{PROD_GUARD_PATTERNS}}` when there is no production yet, `{{SCHEMA_DUMP_CMD}}`
    when there is no database).
+   - **Validate every value before it is written.** The values land inside single-quoted shell
+     strings and are fed to `grep -E`, so a bad one either breaks the script or silently switches
+     a check off. Before filling, run each of these and re-ask the question for any value that
+     fails; never "fix" a value yourself.
+     - No value may contain a single quote (`'`). Ask for it again without the quote.
+     - Pattern tokens (`PROD_GUARD_PATTERNS`, `SECRET_FILE_PATTERNS`, `ALLOWED_TRACKED`,
+       `UNSAFE_SQL`, `STORAGE_PATTERNS`, `BUNDLE_LEAK_PATTERNS`, `PUBLIC_VAR_PREFIX`) must parse:
+       `grep -qE '<value>' </dev/null; [ $? -le 1 ]`. An exit of 2 means an invalid regex.
+     - Name tokens (`PROD_ENV_VAR_NAMES`, `SECRET_VAR_NAMES`, `PUBLIC_VAR_ALLOWLIST`) must be
+       space-separated identifiers: `^[A-Za-z_][A-Za-z0-9_]*( [A-Za-z_][A-Za-z0-9_]*)*$`.
+     - Directory tokens (`CLIENT_DIR`, `SERVER_DIRS`, `MIGRATIONS_DIR`, `BUNDLE_DIR`) must be
+       relative paths made of `[A-Za-z0-9._/-]` and spaces between paths, and each must exist
+       (create it with `mkdir -p` if the user confirms it is where the code will live).
+     Both installed scripts repeat this check at start-up and fail closed on an invalid value, so a
+     mistake here shows up as "misconfigured" on the first run rather than as a missing check.
    - **Default for `{{SECRET_FILE_PATTERNS}}`**, extended (never shortened) from Q3:
      `.*\.env$|.*\.env\..*|.*\.dev\.vars$|.*\.pem$|.*\.key$|.*\.p12$|.*\.pfx$|.*\.jks$|.*\.keystore$|.*\.ppk$|(^|/)id_(rsa|dsa|ecdsa|ed25519)$|.*credentials.*\.json$|.*service-account.*\.json$|.*\.local$`
      The last shape catches `.guardrails/denylist.local` if it is ever force-added.

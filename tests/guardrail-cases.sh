@@ -15,6 +15,16 @@ ROOT=$(git rev-parse --show-toplevel)
 . "$ROOT/tests/lib/assert.sh"
 cd "$PROJ" || exit 2
 
+echo "── [0] configuration self-check: a broken pattern or a missing directory fails, never passes"
+portable_sed "s#^SECRET_FILE_PATTERNS='.*'#SECRET_FILE_PATTERNS='.*\\.env\$|('#" scripts/ci-guardrails.sh
+expect_reject "an invalid SECRET_FILE_PATTERNS is caught" "SECRET_FILE_PATTERNS is not a valid extended regex"
+portable_sed "s#^UNSAFE_SQL='.*'#UNSAFE_SQL='(\\.unsafe\\(|\\.raw\\('#" scripts/ci-guardrails.sh
+expect_reject "an invalid UNSAFE_SQL is caught" "UNSAFE_SQL is not a valid extended regex"
+portable_sed "s|^SERVER_DIRS='.*'|SERVER_DIRS='src/server-renamed'|" scripts/ci-guardrails.sh
+expect_reject "a configured directory that does not exist is caught" "configured directory 'src/server-renamed' does not exist"
+portable_sed "s|^SECRET_VAR_NAMES='.*'|SECRET_VAR_NAMES='DATABASE_URL; rm -rf x'|" scripts/ci-guardrails.sh
+expect_reject "shell text in a name list is caught" "SECRET_VAR_NAMES must be space-separated variable names"
+
 echo "── [1] confidential files must not be tracked"
 echo "-----BEGIN PRIVATE KEY-----" > deploy.pem; git add -f deploy.pem
 expect_reject "a tracked .pem is caught" "confidential file(s) tracked"

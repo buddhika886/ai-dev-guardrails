@@ -197,6 +197,42 @@ for p in node python3; do printf '#!/bin/sh\nexit 9\n' > "$SHIM/$p"; chmod +x "$
 BROKEN_PATH="$SHIM:$PATH"
 
 guard_raw block "no hook payload at all blocks"            ''                                                        "$PATH"
+
+echo "── a broken filled pattern must BLOCK everything, not silently disable a check"
+# An invalid regex makes grep exit 2; in an `&& grep -q` chain that reads as "no match", and the
+# production block vanishes with a line on stderr nobody sees. The guard must refuse to run instead.
+portable_sed "s#^PROD_GUARD_PATTERNS='.*'#PROD_GUARD_PATTERNS='db\\.prod\\.acme\\.example('#" scripts/claude-bash-guard.sh
+guard block "invalid PROD_GUARD_PATTERNS blocks an ordinary command" 'npm test'
+out=$(printf '%s' "$(node -e 'process.stdout.write(JSON.stringify({tool_name:"Bash",tool_input:{command:"npm test"}}))')" | bash scripts/claude-bash-guard.sh 2>&1 >/dev/null)
+if grep -q "misconfigured" <<<"$out"; then t_pass "the block names the misconfiguration"; else t_fail "block reason does not say misconfigured" "$out"; fi
+reset_project
+
+# A quote in an interview answer is code by the time the script runs, so no runtime check can
+# catch it. The only place to refuse it is the fill step, which install.sh mirrors from bootstrap.
+echo "── a quote or a broken pattern in the interview is refused at install time"
+BADVALS=$(mktemp -d)
+for case_name in quote regex names; do
+  node -e '
+    const fs = require("fs"), v = JSON.parse(fs.readFileSync(process.argv[1], "utf8"))
+    const which = process.argv[2]
+    if (which === "quote") v.PROD_ENV_VAR_NAMES = "x\x27; touch INJECTED; PROD_ENV_VAR_NAMES=\x27y"
+    if (which === "regex") v.SECRET_FILE_PATTERNS = ".*\\.env$|("
+    if (which === "names") v.SECRET_VAR_NAMES = "DATABASE_URL; rm -rf x"
+    fs.writeFileSync(process.argv[3], JSON.stringify(v))
+  ' "$ROOT/tests/values/scenario-a.json" "$case_name" "$BADVALS/$case_name.json"
+  # install.sh copies from the repository it is run inside, so run it from the template root.
+  out=$(cd "$ROOT" && bash tests/install.sh "$BADVALS/$case_name.json" "$BADVALS/proj-$case_name" 2>&1); rc=$?
+  if [ "$rc" -ne 0 ] && grep -q "invalid interview values" <<<"$out"; then
+    t_pass "install refuses a bad $case_name value"
+  else
+    t_fail "install accepted a bad $case_name value (rc=$rc)" "$out"
+  fi
+  if [ -e "$BADVALS/proj-$case_name/INJECTED" ]; then t_fail "the injected command ran during install"; fi
+done
+rm -rf "$BADVALS"
+portable_sed "s#^SECRET_VAR_NAMES='.*'#SECRET_VAR_NAMES='DATABASE_URL STRIPE KEY'#" scripts/claude-bash-guard.sh
+guard allow "plain identifiers in a name list still pass the self-check" 'npm test'
+reset_project
 guard_raw block "unparseable payload hiding a prod host"   '{not json vercel deploy --prod'                          "$PATH"
 guard_raw block "no working parser, prod command"          '{"tool_input":{"command":"vercel deploy --prod"}}'        "$BROKEN_PATH"
 guard_raw block "no working parser, force-push"            '{"tool_input":{"command":"git push --force origin main"}}' "$BROKEN_PATH"
