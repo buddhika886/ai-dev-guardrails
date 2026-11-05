@@ -56,6 +56,14 @@ tool: it needs at least two real options, so every question below has two or mor
 never counted as one; and choosing an option gives no text field, so anything that needs typing
 (paths, names, a command) is its own follow-up question, never an option that says "type it".
 
+**Plain explanations.** A question with an **Explain** line gets one extra option, always last:
+"Not sure, explain this". If the user picks it, show the Explain text as one short message, then
+ask the same question again without that option, adding that the first option is the safe choice
+if they are still unsure. Re-asking is part of the same question, not a new one, so it does not
+break the order rule above. The tool allows at most four options, not counting Other; every
+question below has room for the extra one. If a later edit takes a question to four options, move
+its explanation into the first option's description instead of adding the option.
+
 Before the first question, run `basename "$PWD"` and `gh api user -q .login 2>/dev/null || true`
 so the defaults below can be filled in. Read `.template/lang/ts/fragment.md` for the prefix and
 bundle table.
@@ -93,6 +101,8 @@ should never ship."
 - Static export (recommended if unsure): built files land in `out`, and the kit scans them
 - Server-rendered: there is no static output to scan
 
+**Explain:** "'Static export' builds the site once into plain files, like printing a brochure. 'Server' builds each page when someone visits, like a shop assistant. Not sure? Choose static export."
+
 **Q1c. Only if Astro or Remix.**
 - Astro: `PUBLIC_` settings reach the browser; built app in `dist`
 - Remix: no public prefix; built app in `build/client`
@@ -106,6 +116,8 @@ server code live, because different rules apply to each."
 - Single package (recommended if unsure): one `package.json` at the root
 - Monorepo: several packages, each with its own `package.json`
 
+**Explain:** "One package is one app in one folder. Several (a monorepo) is a few apps kept together, such as a website and its API. Not sure? Choose one package."
+
 **Q2a-paths. Only if monorepo.** "Which folders hold the packages? Space-separated, for example
 `apps/web packages/api`." (text answer)
 
@@ -114,16 +126,22 @@ no secrets and no browser storage end up there." Options: the framework's usual 
 (`src/app src/components` for Next.js, `src` for Vite and Astro, `app` for Remix), then
 `src/client`, then Other.
 
+**Explain:** "Code that runs on the visitor's own device, so anyone can read it. The kit checks no passwords end up there."
+
 **Q2c. Server code.** "Which folders hold code that runs on the server or at the edge? The kit
 checks that database queries there are written safely." Options: the framework's usual folder first
 (`src/server` for Next.js, `src/server` for Vite, `src/pages/api` for Astro, `app/routes` for
 Remix), then `server`, then Other (space-separated paths).
+
+**Explain:** "Code that runs on your own machines, out of sight, and usually talks to the database. The kit checks that visitors' input cannot change your database queries."
 
 **Q2d. Database migrations.** "Where do database migrations live? The kit stops an old migration
 from being edited, which would make databases drift apart."
 - No database (recommended if unsure): the migration check is switched off and says so
 - `prisma/migrations`
 - `db/migrations`
+
+**Explain:** "A migration is a saved change to the database's layout, like adding a column to a spreadsheet. Editing one after it has run makes copies of the database disagree."
 
 ### Q3. Data
 
@@ -164,6 +182,8 @@ SECRET, TOKEN, PASSWORD, API_KEY or CREDENTIALS is already covered; name the oth
 - Typical set: `DATABASE_URL SESSION_SECRET STRIPE_SECRET_KEY`
 - My own list: I'll ask for the names next
 
+**Explain:** "Settings are values the app reads when it starts, such as a database password. Name any that must stay private."
+
 **Q4b-names. Only if "my own list".** "Which names? Separated by spaces." (text answer)
 
 **Q4c. Public setting.** Only if Q1 gave a public prefix. "Which setting is allowed to be public?
@@ -172,6 +192,8 @@ ones you name."
 - None yet (recommended if unsure): the kit fails if any public setting appears, until you add it
 - `<prefix>APP_URL`: the site's own address, the usual first one
 - My own list: I'll ask for the names next
+
+**Explain:** "A few settings are meant for every visitor, such as the site's address. Name only those, and everything else stays private."
 
 **Q4c-names. Only if "my own list".** "Which names? Separated by spaces." (text answer)
 
@@ -200,12 +222,16 @@ a spec, a PRD or a runbook? They are linked from the rules file so the AI reads 
 - `@<handle from gh>` (recommended): you
 - A team: I'll ask for the team handle next, for example `@acme/platform`
 
+**Explain:** "The person who must approve any change to the safety rules, like a second signature on a cheque."
+
 **O2-team. Only if "a team".** "Which GitHub handle or team?" (text answer)
 
 **O3. Licence.** "Should the code carry an open-source licence? For client or internal work, no
 licence file is the safe default: the code stays all rights reserved."
 - No licence file (recommended for client and internal work)
 - MIT: open source; I'll ask who holds the copyright next
+
+**Explain:** "A licence says what others may do with your code. With no licence file, nobody else may use it."
 
 **O3-holder. Only if MIT.** "Who holds the copyright? For example 'Jane Doe and contributors'."
 (text answer)
@@ -218,6 +244,8 @@ contribute the change under the project's licence. No keys or signatures are inv
 - No: commits carry no record of who had the right to contribute them. If the project is later
   open-sourced, handed to a client or audited, every past commit will fail that check and need
   rewriting, which is far harder than switching it on now. Choose No only for a throwaway project
+
+**Explain:** "One line on each change saying 'I have the right to share this', like signing a form. Git adds it for you."
 
 The template's own `LICENSE` names the template's author, so it is never kept as it is.
 
