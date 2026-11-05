@@ -210,6 +210,15 @@ licence file is the safe default: the code stays all rights reserved."
 **O3-holder. Only if MIT.** "Who holds the copyright? For example 'Jane Doe and contributors'."
 (text answer)
 
+**O4. Commit sign-off.** "Should every commit carry a sign-off line? It is one line of text
+(`Signed-off-by: Name <email>`) that git adds for you; it records that the person had the right to
+contribute the change under the project's licence. No keys or signatures are involved."
+- Yes (recommended): bootstrap sets `git config format.signoff true` in this clone so every commit
+  gets the line automatically, and CI checks that every commit in a pull request has one
+- No: commits carry no record of who had the right to contribute them. If the project is later
+  open-sourced, handed to a client or audited, every past commit will fail that check and need
+  rewriting, which is far harder than switching it on now. Choose No only for a throwaway project
+
 The template's own `LICENSE` names the template's author, so it is never kept as it is.
 
 ### Confirm
@@ -304,8 +313,13 @@ Do these in order. Show the user what you are doing at each step.
      `.*\.env$|.*\.env\..*|.*\.dev\.vars$|.*\.pem$|.*\.key$|.*\.p12$|.*\.pfx$|.*\.jks$|.*\.keystore$|.*\.ppk$|(^|/)id_(rsa|dsa|ecdsa|ed25519)$|.*credentials.*\.json$|.*service-account.*\.json$|.*\.local$`
      The last shape catches `.guardrails/denylist.local` if it is ever force-added.
 4. **Apply tier conditionals.** For each line tagged `{{IF_SECURITY_TIER}}` or
-   `{{IF_GOVERNANCE_TIER}}` in `CLAUDE.project.md` and `README.project.md`: if the tier is on, strip the tag prefix and keep
-   the line; if off, delete the whole line.
+   `{{IF_GOVERNANCE_TIER}}` in `CLAUDE.project.md` and `README.project.md`, and each line tagged
+   `{{IF_SIGNOFF}}` in those two files and `#{{IF_SIGNOFF}}` in `.github/workflows/ci.yml` (behind
+   a comment sign so the template stays valid YAML): if the tier or option is on, strip the tag
+   prefix (comment sign included) and keep the line; if off, delete the whole line.
+   - If sign-off is on, also run `git config format.signoff true` in this clone, so the user's
+     own commits get the line without typing `-s`. Teammates run the same once after cloning; the
+     generated README says so.
    - **Do not leave a dangling pointer.** The security tier ships only a placeholder, so a kept
      security line would point at a file that does not exist. When security is on, keep its lines
      and append ` (arrives in template release T2; not present yet)` to each. Governance lines need
@@ -364,6 +378,7 @@ that fills it. Empty-allowed tokens are marked.
 | `{{BOOTSTRAP_DATE}}`      | Today's date, ISO (YYYY-MM-DD), for the governance records               | no            |
 | `{{IF_SECURITY_TIER}}`    | Q3 (data) and/or Q5 (tier): line kept if on, dropped if off              | line marker   |
 | `{{IF_GOVERNANCE_TIER}}`  | Q5 (tier): line kept if on, dropped if off                               | line marker   |
+| `{{IF_SIGNOFF}}`          | O4 (sign-off): line kept if on, dropped if off                           | line marker   |
 
 \* When the user answers "none yet" for production, set `{{PROD_HOST}}` to a placeholder like
 "(no production yet)" and `{{PROD_APPROVED_PATH}}` to "(to be defined)", and leave the pattern tokens

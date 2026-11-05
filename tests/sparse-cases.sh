@@ -101,6 +101,12 @@ for p in .template tests scripts/template-integrity.sh CONTRIBUTING.md CODE_OF_C
          .github/ISSUE_TEMPLATE .claude/commands/bootstrap.md; do
   if [ -e "$p" ]; then t_fail "template file survived: $p"; else t_pass "gone: $p"; fi
 done
+if ! grep -qE '^  dco:' .github/workflows/ci.yml && ! grep -q '{{IF_SIGNOFF}}' .github/workflows/ci.yml README.md CLAUDE.md \
+   && [ "$(git config format.signoff || true)" != "true" ] && ! grep -qF 'Signed-off-by' CLAUDE.md; then
+  t_pass "sign-off off: no dco job, no git config, no markers left behind"
+else
+  t_fail "sign-off off: something leaked through" "$(grep -n 'dco\|SIGNOFF\|Signed-off' .github/workflows/ci.yml README.md CLAUDE.md)"
+fi
 if head -1 README.md | grep -qxF "# $(node -p 'require("./package.json").name')"; then
   t_pass "README.md is the project's own, titled with the project name"
 else

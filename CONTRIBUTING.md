@@ -30,10 +30,11 @@ By adding it you certify the [Developer Certificate of Origin](https://developer
 in short, that you wrote the change (or have the right to submit it) and that it can be shared under
 this project's licence. You keep the copyright in your contribution.
 
-Git adds the line for you with `-s`:
+Git adds the line for you with `-s`, or once and for all for this clone:
 
 ```bash
-git commit -s -m "Add a deploy pattern for shipit"
+git config format.signoff true      # every commit in this repo gets the line from now on
+git commit -s -m "Add a deploy pattern for shipit"   # or per commit
 ```
 
 Forgot? Fix the commits on your branch and push again:

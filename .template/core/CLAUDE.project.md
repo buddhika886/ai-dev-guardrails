@@ -55,6 +55,11 @@ it is disclosed, whatever happens to the repository, and must be rotated.
   `printenv`, echoing secret-named variables, secret-manager CLIs), and `permissions.deny` stops the
   Read tool opening secret files. Both are backstops; this rule is the control.
 
+{{IF_SIGNOFF}}## Commit sign-off
+{{IF_SIGNOFF}}
+{{IF_SIGNOFF}}Every commit carries a `Signed-off-by` line (`git commit -s`; `git config format.signoff true`
+{{IF_SIGNOFF}}makes it automatic). CI rejects a pull request with an unsigned commit. If asked to commit, use `-s`.
+{{IF_SIGNOFF}}
 ## Security rules (verify before every commit and push)
 
 1. No secrets in any tracked file ({{SECRET_FILES}}). Scan the diff before committing.

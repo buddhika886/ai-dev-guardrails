@@ -439,6 +439,13 @@ if grep -qF 'git show "origin/${GITHUB_BASE_REF}:scripts/ci-guardrails.sh"' .git
 else
   t_fail "CI runs the pull request's own copy of the checks" "$(grep -n guardrails .github/workflows/ci.yml)"
 fi
+if grep -qE '^  dco:' .github/workflows/ci.yml && grep -qF 'Every commit is signed off' .github/workflows/ci.yml \
+   && ! grep -q '{{IF_SIGNOFF}}' .github/workflows/ci.yml && [ "$(git config format.signoff)" = "true" ] \
+   && grep -qF 'git config format.signoff true' README.md && grep -qF 'Signed-off-by' CLAUDE.md; then
+  t_pass "sign-off on: CI has the dco job, the clone signs off automatically, README and CLAUDE.md say so"
+else
+  t_fail "sign-off on: dco job, git config or docs missing" "$(grep -n 'dco\|signoff' .github/workflows/ci.yml README.md CLAUDE.md; git config format.signoff)"
+fi
 if head -1 README.md | grep -qxF "# $(node -p 'require("./package.json").name')"; then
   t_pass "README.md is the project's own, titled with the project name"
 else

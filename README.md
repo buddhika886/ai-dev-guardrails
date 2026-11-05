@@ -176,4 +176,4 @@ No safety system is complete. The gaps, plainly:
   records; extra scanners if your team already pays for one.
 - [Choosing a model](docs/choosing-a-model.md): running Claude Code through OpenRouter, Amazon
   Bedrock or Google Vertex, and the data questions to ask first.
-- [Contributing](CONTRIBUTING.md), [reporting a weakness](SECURITY.md) and the [MIT licence](LICENSE).
+- [Contributing](CONTRIBUTING.md) (every commit is signed off; `git config format.signoff true` makes that automatic), [reporting a weakness](SECURITY.md) and the [MIT licence](LICENSE).

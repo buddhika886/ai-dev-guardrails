@@ -47,6 +47,18 @@ gh api -X PUT repos/OWNER/REPO/vulnerability-alerts        # Dependabot alerts
 gh api -X PUT repos/OWNER/REPO/automated-security-fixes    # Dependabot security updates
 ```
 
+{{IF_SIGNOFF}}### Commit sign-off
+{{IF_SIGNOFF}}
+{{IF_SIGNOFF}}Every commit carries a `Signed-off-by` line, the contributor's statement that they have the right
+{{IF_SIGNOFF}}to submit the change under this project's licence (the Developer Certificate of Origin). CI fails
+{{IF_SIGNOFF}}a pull request with an unsigned commit. Run this once after cloning and git adds the line for you:
+{{IF_SIGNOFF}}
+{{IF_SIGNOFF}}```bash
+{{IF_SIGNOFF}}git config format.signoff true
+{{IF_SIGNOFF}}```
+{{IF_SIGNOFF}}
+{{IF_SIGNOFF}}Forgot? `git rebase --signoff main` adds it to the commits on your branch.
+{{IF_SIGNOFF}}
 ### What to expect when working with Claude Code
 
 - **Start Claude Code at the repository root.** The hooks and permission rules live in
