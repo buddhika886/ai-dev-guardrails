@@ -63,6 +63,9 @@ CONSENT_PATTERNS+="|${B}gh[[:space:]]+api[^|;&]*(-X|--method)[[:space:]=]*(POST|
 CONSENT_PATTERNS+="|${B}(npm|pnpm|yarn|bun)([[:space:]]+npm)?[[:space:]]+(publish|unpublish|deprecate|dist-tag)"
 CONSENT_PATTERNS+="|${B}changeset[[:space:]]+publish"
 CONSENT_PATTERNS+="|${B}docker[[:space:]]+push"
+# An alias defined on the command line (`git -c alias.p=push p`) moves the verb out of the position
+# the patterns above look at. Any on-the-fly alias is treated as the consent command it could hide.
+GIT_ALIAS="${B}git[^|;&]*[[:space:]]-c[[:space:]]*alias\\."
 
 # Deploys and remote database changes. On by default: a project with no production yet still gets
 # a prompt, because the cost of a question is lower than the cost of an unintended deploy.
@@ -123,11 +126,19 @@ DEP_WEAKEN+="|npm_config_(min_release_age|before|allow_git|allow_remote|strict_a
 SECRET_READERS='(cat|bat|less|more|head|tail|nl|strings|xxd|od|hexdump|grep|egrep|fgrep|rg|ag|awk|sed|cut|sort|uniq|diff|base64|jq|yq)'
 # SC2016: $HOME here is a literal regex alternative, matched in the command text, not expanded.
 # shellcheck disable=SC2016
-SECRET_FILES='(\.env(\.[A-Za-z0-9_-]+)*|\.dev\.vars|(~|\$HOME|\$\{HOME\})/\.npmrc|\.netrc|\.pgpass|credentials(\.json)?|[^[:space:]]+\.pem|[^[:space:]]+\.key|[^[:space:]]+\.p12|[^[:space:]]+\.pfx|id_(rsa|dsa|ecdsa|ed25519)|\.docker/config\.json|\.kube/config)'
+SECRET_FILES='(\.env(\.[A-Za-z0-9_-]+)*|\.dev\.vars|\.claude/profiles/[^[:space:]]*\.settings\.json|\.guardrails/[^[:space:]]*\.local|/proc/(self|[0-9]+)/environ|(~|\$HOME|\$\{HOME\})/\.npmrc|\.netrc|\.pgpass|credentials(\.json)?|[^[:space:]]+\.pem|[^[:space:]]+\.key|[^[:space:]]+\.p12|[^[:space:]]+\.pfx|id_(rsa|dsa|ecdsa|ed25519)|\.docker/config\.json|\.kube/config)'
 SECRET_FILE_READ="${B}${SECRET_READERS}([[:space:]][^|;&]*)?[[:space:]/=<\"']${SECRET_FILES}([[:space:]\"'|;&)>]|$)"
 SECRET_FILE_READ+="|<[[:space:]]*${SECRET_FILES}([[:space:]\"'|;&)>]|$)"
+# The shell expands globs after the guard has looked, so `cat .en*` reads .env while the text never
+# says so. A secret reader given a dotfile glob, a glob ending in a key extension, or `.*` is blocked.
+GLOB_READ="${B}${SECRET_READERS}([[:space:]][^|;&]*)?[[:space:]/=][\"']?((\./)?\.[A-Za-z0-9_.-]*[*?[][^[:space:]]*|[^[:space:]]*[*?[][^[:space:]]*\.(pem|key|p12|pfx)|\.\*)([[:space:]\"'|;&)>]|$)"
 # A bare environment dump, at the start of a command or after a separator.
-ENV_DUMP='(^|[;&|({][[:space:]]*|\$\([[:space:]]*)(env|printenv|set|export[[:space:]]+-p|declare[[:space:]]+-[px]+)[[:space:]]*($|[|;&)>])'
+# Matched at a word boundary rather than only at the start of a command, so a prefix
+# (`FOO=bar env`, `eval 'env'`) does not hide it. `env -0` is the same dump with NUL separators.
+# `env FOO=1 cmd` (running a command with a variable set) stays allowed: nothing follows the dump.
+ENV_DUMP="${B}(env|printenv)([[:space:]]+-0)?[[:space:]]*($|[|;&)>'\"])"
+# `set` is also an ordinary word (`echo set`), so it keeps the command-position anchor.
+ENV_DUMP+="|(^|[;&|({][[:space:]]*|\\$\\([[:space:]]*)(set|export[[:space:]]+-p|declare[[:space:]]+-[px]+)[[:space:]]*($|[|;&)>])"
 ENV_DUMP+='|process\.env[[:space:]]*[),]|os\.environ[[:space:]]*[),]'
 # Any variable whose name says it is a secret, echoed.
 SECRET_NAME_SHAPE='[A-Za-z0-9_]*(SECRET|TOKEN|PASSWORD|PASSWD|API_?KEY|PRIVATE_?KEY|ACCESS_?KEY|CREDENTIALS?)[A-Za-z0-9_]*'
@@ -213,12 +224,13 @@ if [ -n "$PROD_ENV_VAR_NAMES" ]; then
 fi
 
 # 2a) Force-push.
-if grep -qiE 'git[[:space:]]+push' <<<"$cmd" && grep -qiE '(--force|--force-with-lease|[[:space:]]-f([[:space:]]|$))' <<<"$cmd"; then
-  block "force-push is not allowed on the shared repo (never force-push over others' history)."
+# `+ref` is a force-push by refspec, `--mirror` overwrites every ref, `--delete`/`-d` removes one.
+if grep -qiE 'git[[:space:]]+push|alias\.[^=[:space:]]*=push' <<<"$cmd" && grep -qiE "(--force|--force-with-lease|--mirror|--delete|[[:space:]]-[fd]([[:space:]]|$)|[[:space:]][\"']?\+[A-Za-z0-9_./-]+)" <<<"$cmd"; then
+  block "force-push, mirror or remote branch delete is not allowed on the shared repo (never rewrite others' history)."
 fi
 
 # 2b) Other destructive git.
-if grep -qiE 'git[[:space:]]+reset[[:space:]].*--hard|git[[:space:]]+clean[[:space:]]+-[A-Za-z]*f' <<<"$cmd"; then
+if grep -qiE 'git[[:space:]]+reset[[:space:]].*--hard|git[[:space:]]+clean[[:space:]]+(-[A-Za-z]*f|--force)' <<<"$cmd"; then
   block "destructive git (reset --hard / clean -f). Confirm with the user and run it yourself if truly intended."
 fi
 
@@ -228,6 +240,7 @@ DISCLOSE="this would print a secret into the session transcript, which is stored
 # is not caught by the `.env*` shape.
 scrubbed=$(printf '%s' "$cmd" | sed -E 's/\.(env|dev\.vars)\.(example|sample|template|dist)([^A-Za-z0-9_-]|$)/\3/g')
 if grep -qiE "$SECRET_FILE_READ" <<<"$scrubbed"; then block "$DISCLOSE"; fi
+if grep -qiE "$GLOB_READ" <<<"$scrubbed"; then block "$DISCLOSE"; fi
 if grep -qE "$ENV_DUMP" <<<"$cmd"; then block "$DISCLOSE"; fi
 if grep -qiE "$SECRET_CLIS" <<<"$cmd"; then block "$DISCLOSE"; fi
 secret_names="$SECRET_NAME_SHAPE"
@@ -238,6 +251,13 @@ if grep -qE "${B}(echo|printf|print)[^|;&]*\\\$\\{?(${secret_names})([^A-Za-z0-9
   block "$DISCLOSE"
 fi
 if grep -qE "${B}printenv[[:space:]]+([^|;&]*[[:space:]])?(${secret_names})([^A-Za-z0-9_]|$)" <<<"$cmd"; then
+  block "$DISCLOSE"
+fi
+# The same secrets reached through code or a here-string rather than echo: node -e
+# 'console.log(process.env.NAME)', python's os.environ["NAME"], awk's ENVIRON["NAME"], and
+# `cat <<< "$NAME"` / `tee x <<< "$NAME"`.
+SECRET_VIA_CODE="process\\.env\\.(${secret_names})([^A-Za-z0-9_]|$)|(os\\.environ|ENVIRON)(\\.get)?[[(][[:space:]]*[\"'](${secret_names})[\"']|<<<[[:space:]]*[\"']?\\$\\{?(${secret_names})([^A-Za-z0-9_]|$)"
+if grep -qE "$SECRET_VIA_CODE" <<<"$cmd"; then
   block "$DISCLOSE"
 fi
 
@@ -257,6 +277,9 @@ ask() {
 
 if grep -qiE "$CONSENT_PATTERNS" <<<"$cmd"; then
   ask "Consent required: this commits, pushes, publishes or changes something outside this machine. CLAUDE.md requires your explicit go-ahead each time."
+fi
+if grep -qiE "$GIT_ALIAS" <<<"$cmd"; then
+  ask "Consent required: this defines a git alias on the command line, which can stand for commit, push or anything else. Run the real command instead so the guard can see it."
 fi
 if grep -qiE "$DEPLOY_PATTERNS" <<<"$cmd"; then
   ask "Consent required: this deploys or changes a remote database. Confirm the target is not production, or that you intend it."

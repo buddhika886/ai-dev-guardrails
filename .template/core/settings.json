@@ -20,7 +20,8 @@
       "Edit(.github/workflows/ci.yml)",
       "Edit(.github/CODEOWNERS)",
       "Edit(.gitleaks.toml)",
-      "Edit(CLAUDE.md)"
+      "Edit(CLAUDE.md)",
+      "Edit(.claude/settings.json)"
     ],
     "deny": [
       "Read(.env)",
@@ -28,6 +29,8 @@
       "Read(!.env.example)",
       "Read(!.env.sample)",
       "Read(.dev.vars)",
+      "Read(.claude/profiles/*.settings.json)",
+      "Read(.guardrails/*.local)",
       "Read(*.pem)",
       "Read(*.key)",
       "Read(*.p12)",

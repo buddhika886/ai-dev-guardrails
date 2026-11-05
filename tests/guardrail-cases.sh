@@ -171,6 +171,10 @@ portable_sed '/"disableBypassPermissionsMode": "disable",/d' .claude/settings.js
 expect_reject "removing the bypass-mode lock is caught" "disableBypassPermissionsMode must be"
 portable_sed '/"Read(.env)",/d' .claude/settings.json
 expect_reject "removing a Read deny rule is caught" "deny rule removed from .claude/settings.json: Read(.env)"
+portable_sed '/"Read(.claude\/profiles\/\*.settings.json)",/d' .claude/settings.json
+expect_reject "removing the profile deny rule is caught" "deny rule removed from .claude/settings.json: Read(.claude/profiles/*.settings.json)"
+node -e 'const f=".claude/settings.json",fs=require("fs");const j=JSON.parse(fs.readFileSync(f,"utf8"));j.permissions.ask=j.permissions.ask.filter(r=>r!=="Edit(.claude/settings.json)");fs.writeFileSync(f,JSON.stringify(j,null,2))'
+expect_reject "removing the settings-file ask rule is caught" "consent rule removed from .claude/settings.json: Edit(.claude/settings.json)"
 portable_sed '/"Bash(gh pr create \*)",/d' .claude/settings.json
 expect_reject "removing a non-sample ask rule is caught" "consent rule removed from .claude/settings.json: Bash(gh pr create *)"
 mkdir -p .claude; printf '{"disableAllHooks": true}\n' > .claude/settings.local.json

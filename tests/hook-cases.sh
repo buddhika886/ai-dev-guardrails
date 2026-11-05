@@ -53,6 +53,52 @@ guard block "git push --force-with-lease"         'git push --force-with-lease o
 guard block "git reset --hard"                    'git reset --hard HEAD~1'
 guard block "git clean -fd"                       'git clean -fd'
 
+echo "── bypass forms from the 2026-11 audit must be caught (one case per finding)"
+# 2: a command-line alias moves the verb out of the position the consent patterns look at
+guard ask   "alias push asks"                              'git -c alias.p=push p origin main'
+guard ask   "alias commit asks"                            'git -c alias.ci=commit ci -m wip'
+guard block "alias force-push by refspec blocks"           'git -c alias.p=push p origin +main'
+guard ask   "a real -c option before commit still asks"    'git -c user.name=x commit -m wip'
+guard allow "a -c option before log is fine"               'git -c core.pager=cat log'
+# 3: the shell expands globs after the guard has looked
+guard block "cat .en* blocks"                              'cat .en*'
+guard block "cat .env* blocks"                             'cat .env*'
+guard block "cat ./.e?? blocks"                            'cat ./.e??'
+guard block "cat .* blocks"                                'cat .*'
+guard block "cat *.pem blocks"                             'cat *.pem'
+guard allow "cat src/*.ts is fine"                         'cat src/*.ts'
+guard allow "grep -r over the tree is fine"                'grep -rn TODO src'
+# 4: an env dump with a prefix
+guard block "FOO=bar env blocks"                           'FOO=bar env'
+guard block "X=1 printenv blocks"                          'X=1 printenv'
+guard block "eval env blocks"                              "eval 'env'"
+guard block "env -0 blocks"                                'env -0'
+guard allow "env FOO=1 cmd is fine"                        'env FOO=1 npm test'
+guard allow "npm run env-check is fine"                    'npm run env-check'
+# shellcheck disable=SC2016 # the $NAME must reach the guard unexpanded
+guard allow "a presence test ending in echo set is fine"   '[ -n "$DATABASE_URL" ] && echo set'
+# 5: secrets printed through code or a here-string
+guard block "process.env.SECRET in node blocks"            "node -e 'console.log(process.env.DATABASE_URL)'"
+guard block "os.environ[SECRET] in python blocks"          "python3 -c 'import os;print(os.environ[\"STRIPE_SECRET_KEY\"])'"
+guard block "ENVIRON[SECRET] in awk blocks"                "awk 'BEGIN{print ENVIRON[\"DATABASE_URL\"]}'"
+# shellcheck disable=SC2016 # the $NAME must reach the guard unexpanded
+guard block "a here-string of a secret blocks"             'cat <<< "$DATABASE_URL"'
+# shellcheck disable=SC2016 # the $NAME must reach the guard unexpanded
+guard block "tee of a secret here-string blocks"           'tee /tmp/x <<< "$SESSION_SECRET"'
+guard allow "process.env.NODE_ENV is fine"                 "node -e 'console.log(process.env.NODE_ENV)'"
+# 6 and 15: files the deny list did not cover
+guard block "reading a model-provider profile blocks"      'cat .claude/profiles/openrouter.settings.json'
+guard block "grep on a profile blocks"                     'grep AUTH .claude/profiles/bedrock.settings.json'
+guard allow "the example profile is readable"              'cat .claude/profiles/openrouter.settings.json.example'
+guard block "reading the client denylist blocks"           'cat .guardrails/denylist.local'
+guard block "/proc/self/environ blocks"                    'cat /proc/self/environ'
+# 9 and 10: destructive git in long or refspec form
+guard block "git push +main blocks"                        'git push origin +main'
+guard block "git push --mirror blocks"                     'git push --mirror'
+guard block "git push --delete blocks"                     'git push origin --delete feature'
+guard block "git clean --force blocks"                     'git clean --force'
+guard ask   "a plus inside a branch name still only asks"  'git push origin feature+1'
+
 echo "── ordinary work must be ALLOWED"
 guard allow "npm test"                            'npm test'
 guard allow "git status"                           'git status --short'
