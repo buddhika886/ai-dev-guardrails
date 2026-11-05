@@ -34,6 +34,7 @@
   "PROD_ENV_VAR_NAMES": "",
 
   "GOVERNANCE_ENABLED": "off",
+  "SIGNOFF_ENABLED": "off",
   "BOOTSTRAP_DATE": "2026-10-26",
   "CODEOWNERS": "@sig-lib-maintainer",
 

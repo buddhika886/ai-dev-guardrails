@@ -135,6 +135,7 @@ CI runs actionlint on it. The scan steps' behaviour was verified against real pr
 | `.github/CODEOWNERS` | Policy | Names the guardrail owners for every enforcement file (guard, checks, Stop hook, settings, `lefthook.yml`, `.github/`, `.gitleaks.toml`, `.npmrc`, `CLAUDE.md`). With the ruleset's "require review from Code Owners" (section 11), a pull request that touches them needs an owner's approval |
 | `dependencies` job | Scan | OSV-Scanner, checksum-pinned, on `package-lock.json`; fails on any known vulnerability or a missing lockfile; skips, and says so, with no dependencies yet |
 | `secrets` job | Scan | gitleaks, checksum-pinned, over the full git history |
+| `dco` job (optional, chosen at bootstrap) | Check | Every commit in a pull request carries a `Signed-off-by` line, the contributor's statement that they may submit it under the project's licence. Bootstrap also sets `git config format.signoff true` in the clone so the line is added automatically |
 
 ## 6. Secret scanning
 

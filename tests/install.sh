@@ -118,12 +118,16 @@ fi
 # Security on: keep the line, strip the marker, and annotate it as pending (its files do not exist
 # yet). Governance on: strip the marker, no annotation (Step 4.2a installed its files). Off: drop.
 if [ "$GOVERNANCE" = "on" ]; then gov_expr='s/^{{IF_GOVERNANCE_TIER}}//'; else gov_expr='/^{{IF_GOVERNANCE_TIER}}/d'; fi
-for f in CLAUDE.md.pending README.md.pending; do
+SIGNOFF=$(value SIGNOFF_ENABLED)
+# In the YAML file the marker sits behind a comment sign so the template stays valid YAML.
+if [ "$SIGNOFF" = "on" ]; then so_expr='s/^#\{0,1\}{{IF_SIGNOFF}}//'; else so_expr='/^#\{0,1\}{{IF_SIGNOFF}}/d'; fi
+for f in CLAUDE.md.pending README.md.pending .github/workflows/ci.yml; do
   sed -e 's/^{{IF_SECURITY_TIER}}\(.*\)$/\1 (arrives in template release T2; not present yet)/' \
-      -e "$gov_expr" \
+      -e "$gov_expr" -e "$so_expr" \
       "$f" > "$f.tiered"
   mv "$f.tiered" "$f"
 done
+[ "$SIGNOFF" = "on" ] && git config format.signoff true
 
 # ---- bootstrap Step 4.3: fill every token ----
 # Step 4.3's validation rule, mirrored: a value that would break the scripts or silently disable a

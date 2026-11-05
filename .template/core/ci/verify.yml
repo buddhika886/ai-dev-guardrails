@@ -105,6 +105,37 @@ jobs:
             echo "package-lock.json is missing"; exit 1
           fi
 
+#{{IF_SIGNOFF}}  dco:
+#{{IF_SIGNOFF}}    # Every commit in a pull request carries a Developer Certificate of Origin sign-off
+#{{IF_SIGNOFF}}    # (git commit -s): the contributor's statement that they have the right to submit it under
+#{{IF_SIGNOFF}}    # the project's licence. Chosen at bootstrap; `git config format.signoff true` makes it
+#{{IF_SIGNOFF}}    # automatic in a clone.
+#{{IF_SIGNOFF}}    if: github.event_name == 'pull_request'
+#{{IF_SIGNOFF}}    runs-on: ubuntu-latest
+#{{IF_SIGNOFF}}    steps:
+#{{IF_SIGNOFF}}      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+#{{IF_SIGNOFF}}        with:
+#{{IF_SIGNOFF}}          fetch-depth: 0
+#{{IF_SIGNOFF}}      - name: Every commit is signed off
+#{{IF_SIGNOFF}}        env:
+#{{IF_SIGNOFF}}          BASE: ${{ github.event.pull_request.base.sha }}
+#{{IF_SIGNOFF}}          HEAD: ${{ github.event.pull_request.head.sha }}
+#{{IF_SIGNOFF}}        run: |
+#{{IF_SIGNOFF}}          set -euo pipefail
+#{{IF_SIGNOFF}}          missing=0
+#{{IF_SIGNOFF}}          for c in $(git rev-list --no-merges "$BASE..$HEAD"); do
+#{{IF_SIGNOFF}}            if ! git log -1 --format=%B "$c" | grep -qE '^Signed-off-by: .+ <.+>$'; then
+#{{IF_SIGNOFF}}              echo "::error::commit $(git log -1 --format=%h "$c") has no Signed-off-by line"
+#{{IF_SIGNOFF}}              missing=1
+#{{IF_SIGNOFF}}            fi
+#{{IF_SIGNOFF}}          done
+#{{IF_SIGNOFF}}          if [ "$missing" -ne 0 ]; then
+#{{IF_SIGNOFF}}            echo "Sign your commits with: git commit -s (or run: git config format.signoff true)"
+#{{IF_SIGNOFF}}            echo "To fix existing ones: git rebase --signoff $BASE, then push again."
+#{{IF_SIGNOFF}}            exit 1
+#{{IF_SIGNOFF}}          fi
+#{{IF_SIGNOFF}}          echo "All commits are signed off."
+
   secrets:
     runs-on: ubuntu-latest
     steps:
