@@ -21,7 +21,12 @@ if [ -z "$scenario" ] || [ -z "$dest" ]; then
 fi
 
 ROOT=$(git rev-parse --show-toplevel)
-VALUES="$ROOT/tests/values/scenario-${scenario}.json"
+# The scenario is a letter (tests/values/scenario-<x>.json) or a path to a values file, which lets
+# a case feed deliberately bad answers through the same validation bootstrap applies.
+case "$scenario" in
+  */*|*.json) VALUES="$scenario" ;;
+  *) VALUES="$ROOT/tests/values/scenario-${scenario}.json" ;;
+esac
 [ -f "$VALUES" ] || { echo "✗ no such scenario: $scenario ($VALUES missing)" >&2; exit 2; }
 
 case "$dest" in
@@ -121,6 +126,28 @@ for f in CLAUDE.md.pending README.md.pending; do
 done
 
 # ---- bootstrap Step 4.3: fill every token ----
+# Step 4.3's validation rule, mirrored: a value that would break the scripts or silently disable a
+# check stops the install, which is what bootstrap must do too.
+# SC2016: the single-quoted block is JavaScript; its ${} are template literals, not shell.
+# shellcheck disable=SC2016
+node -e '
+  const v = JSON.parse(require("fs").readFileSync(process.argv[1], "utf8"))
+  const { execFileSync } = require("child_process")
+  const errs = []
+  for (const [k, val] of Object.entries(v)) {
+    if (k.startsWith("_") || typeof val !== "string") continue
+    if (val.includes("\x27")) errs.push(`${k} contains a single quote`)
+  }
+  for (const k of ["PROD_GUARD_PATTERNS","SECRET_FILE_PATTERNS","ALLOWED_TRACKED","UNSAFE_SQL","STORAGE_PATTERNS","BUNDLE_LEAK_PATTERNS","PUBLIC_VAR_PREFIX"]) {
+    if (!v[k]) continue
+    try { execFileSync("grep", ["-qE", v[k]], { input: "", stdio: ["pipe","ignore","ignore"] }) }
+    catch (e) { if (e.status >= 2) errs.push(`${k} is not a valid extended regex`) }
+  }
+  for (const k of ["PROD_ENV_VAR_NAMES","SECRET_VAR_NAMES","PUBLIC_VAR_ALLOWLIST"]) {
+    if (v[k] && !/^[A-Za-z_][A-Za-z0-9_]*( [A-Za-z_][A-Za-z0-9_]*)*$/.test(v[k])) errs.push(`${k} must be space-separated identifiers`)
+  }
+  if (errs.length) { console.error("  ✗ invalid interview values:\n    " + errs.join("\n    ")); process.exit(1) }
+' "$VALUES"
 node "$ROOT/tests/lib/fill.mjs" "$VALUES" \
   lefthook.yml \
   .github/workflows/ci.yml \
@@ -155,7 +182,9 @@ SESSION_SECRET=changeme-local-dev-only
 EOF
 
 if [ "$scenario" = "a" ]; then
-  mkdir -p src/app/api/session src/server migrations db
+  mkdir -p src/app/api/session src/components src/server migrations db
+  # A tracked file keeps src/components alive across `git clean -fd` between cases.
+  printf 'export const Nav = () => null;\n' > src/components/nav.tsx
   cat > src/app/page.tsx <<'EOF'
 export default function Page() {
   const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? '/'

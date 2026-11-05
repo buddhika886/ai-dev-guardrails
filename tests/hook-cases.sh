@@ -53,6 +53,52 @@ guard block "git push --force-with-lease"         'git push --force-with-lease o
 guard block "git reset --hard"                    'git reset --hard HEAD~1'
 guard block "git clean -fd"                       'git clean -fd'
 
+echo "── bypass forms from the 2026-11 audit must be caught (one case per finding)"
+# 2: a command-line alias moves the verb out of the position the consent patterns look at
+guard ask   "alias push asks"                              'git -c alias.p=push p origin main'
+guard ask   "alias commit asks"                            'git -c alias.ci=commit ci -m wip'
+guard block "alias force-push by refspec blocks"           'git -c alias.p=push p origin +main'
+guard ask   "a real -c option before commit still asks"    'git -c user.name=x commit -m wip'
+guard allow "a -c option before log is fine"               'git -c core.pager=cat log'
+# 3: the shell expands globs after the guard has looked
+guard block "cat .en* blocks"                              'cat .en*'
+guard block "cat .env* blocks"                             'cat .env*'
+guard block "cat ./.e?? blocks"                            'cat ./.e??'
+guard block "cat .* blocks"                                'cat .*'
+guard block "cat *.pem blocks"                             'cat *.pem'
+guard allow "cat src/*.ts is fine"                         'cat src/*.ts'
+guard allow "grep -r over the tree is fine"                'grep -rn TODO src'
+# 4: an env dump with a prefix
+guard block "FOO=bar env blocks"                           'FOO=bar env'
+guard block "X=1 printenv blocks"                          'X=1 printenv'
+guard block "eval env blocks"                              "eval 'env'"
+guard block "env -0 blocks"                                'env -0'
+guard allow "env FOO=1 cmd is fine"                        'env FOO=1 npm test'
+guard allow "npm run env-check is fine"                    'npm run env-check'
+# shellcheck disable=SC2016 # the $NAME must reach the guard unexpanded
+guard allow "a presence test ending in echo set is fine"   '[ -n "$DATABASE_URL" ] && echo set'
+# 5: secrets printed through code or a here-string
+guard block "process.env.SECRET in node blocks"            "node -e 'console.log(process.env.DATABASE_URL)'"
+guard block "os.environ[SECRET] in python blocks"          "python3 -c 'import os;print(os.environ[\"STRIPE_SECRET_KEY\"])'"
+guard block "ENVIRON[SECRET] in awk blocks"                "awk 'BEGIN{print ENVIRON[\"DATABASE_URL\"]}'"
+# shellcheck disable=SC2016 # the $NAME must reach the guard unexpanded
+guard block "a here-string of a secret blocks"             'cat <<< "$DATABASE_URL"'
+# shellcheck disable=SC2016 # the $NAME must reach the guard unexpanded
+guard block "tee of a secret here-string blocks"           'tee /tmp/x <<< "$SESSION_SECRET"'
+guard allow "process.env.NODE_ENV is fine"                 "node -e 'console.log(process.env.NODE_ENV)'"
+# 6 and 15: files the deny list did not cover
+guard block "reading a model-provider profile blocks"      'cat .claude/profiles/openrouter.settings.json'
+guard block "grep on a profile blocks"                     'grep AUTH .claude/profiles/bedrock.settings.json'
+guard allow "the example profile is readable"              'cat .claude/profiles/openrouter.settings.json.example'
+guard block "reading the client denylist blocks"           'cat .guardrails/denylist.local'
+guard block "/proc/self/environ blocks"                    'cat /proc/self/environ'
+# 9 and 10: destructive git in long or refspec form
+guard block "git push +main blocks"                        'git push origin +main'
+guard block "git push --mirror blocks"                     'git push --mirror'
+guard block "git push --delete blocks"                     'git push origin --delete feature'
+guard block "git clean --force blocks"                     'git clean --force'
+guard ask   "a plus inside a branch name still only asks"  'git push origin feature+1'
+
 echo "── ordinary work must be ALLOWED"
 guard allow "npm test"                            'npm test'
 guard allow "git status"                           'git status --short'
@@ -197,6 +243,42 @@ for p in node python3; do printf '#!/bin/sh\nexit 9\n' > "$SHIM/$p"; chmod +x "$
 BROKEN_PATH="$SHIM:$PATH"
 
 guard_raw block "no hook payload at all blocks"            ''                                                        "$PATH"
+
+echo "── a broken filled pattern must BLOCK everything, not silently disable a check"
+# An invalid regex makes grep exit 2; in an `&& grep -q` chain that reads as "no match", and the
+# production block vanishes with a line on stderr nobody sees. The guard must refuse to run instead.
+portable_sed "s#^PROD_GUARD_PATTERNS='.*'#PROD_GUARD_PATTERNS='db\\.prod\\.acme\\.example('#" scripts/claude-bash-guard.sh
+guard block "invalid PROD_GUARD_PATTERNS blocks an ordinary command" 'npm test'
+out=$(printf '%s' "$(node -e 'process.stdout.write(JSON.stringify({tool_name:"Bash",tool_input:{command:"npm test"}}))')" | bash scripts/claude-bash-guard.sh 2>&1 >/dev/null)
+if grep -q "misconfigured" <<<"$out"; then t_pass "the block names the misconfiguration"; else t_fail "block reason does not say misconfigured" "$out"; fi
+reset_project
+
+# A quote in an interview answer is code by the time the script runs, so no runtime check can
+# catch it. The only place to refuse it is the fill step, which install.sh mirrors from bootstrap.
+echo "── a quote or a broken pattern in the interview is refused at install time"
+BADVALS=$(mktemp -d)
+for case_name in quote regex names; do
+  node -e '
+    const fs = require("fs"), v = JSON.parse(fs.readFileSync(process.argv[1], "utf8"))
+    const which = process.argv[2]
+    if (which === "quote") v.PROD_ENV_VAR_NAMES = "x\x27; touch INJECTED; PROD_ENV_VAR_NAMES=\x27y"
+    if (which === "regex") v.SECRET_FILE_PATTERNS = ".*\\.env$|("
+    if (which === "names") v.SECRET_VAR_NAMES = "DATABASE_URL; rm -rf x"
+    fs.writeFileSync(process.argv[3], JSON.stringify(v))
+  ' "$ROOT/tests/values/scenario-a.json" "$case_name" "$BADVALS/$case_name.json"
+  # install.sh copies from the repository it is run inside, so run it from the template root.
+  out=$(cd "$ROOT" && bash tests/install.sh "$BADVALS/$case_name.json" "$BADVALS/proj-$case_name" 2>&1); rc=$?
+  if [ "$rc" -ne 0 ] && grep -q "invalid interview values" <<<"$out"; then
+    t_pass "install refuses a bad $case_name value"
+  else
+    t_fail "install accepted a bad $case_name value (rc=$rc)" "$out"
+  fi
+  if [ -e "$BADVALS/proj-$case_name/INJECTED" ]; then t_fail "the injected command ran during install"; fi
+done
+rm -rf "$BADVALS"
+portable_sed "s#^SECRET_VAR_NAMES='.*'#SECRET_VAR_NAMES='DATABASE_URL STRIPE KEY'#" scripts/claude-bash-guard.sh
+guard allow "plain identifiers in a name list still pass the self-check" 'npm test'
+reset_project
 guard_raw block "unparseable payload hiding a prod host"   '{not json vercel deploy --prod'                          "$PATH"
 guard_raw block "no working parser, prod command"          '{"tool_input":{"command":"vercel deploy --prod"}}'        "$BROKEN_PATH"
 guard_raw block "no working parser, force-push"            '{"tool_input":{"command":"git push --force origin main"}}' "$BROKEN_PATH"

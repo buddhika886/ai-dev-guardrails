@@ -35,19 +35,23 @@ model is behind Claude Code. **Proven by:** `hook-cases`, `sparse-cases`.
 | --- | --- | --- |
 | `PROD_GUARD_PATTERNS` | Block | Commands naming your production hosts or deploy verbs (set at bootstrap) |
 | `PROD_ENV_VAR_NAMES` | Block | Commands using variables that carry production credentials |
-| Force-push | Block | `git push --force`, `-f`, `--force-with-lease` |
-| Destructive git | Block | `git reset --hard`, `git clean -f` |
-| `SECRET_FILE_READ` | Block | Reading `.env*`, `.dev.vars`, key and certificate files, `~/.npmrc`, `.netrc`, `.pgpass`, credential files, SSH keys, Docker and Kubernetes config (committed example files are exempt) |
-| `ENV_DUMP` | Block | Bare `env`, `printenv`, `set`, `export -p`; dumping `process.env` or `os.environ` |
+| Force-push | Block | `git push --force`, `-f`, `--force-with-lease`, `--mirror`, `--delete`/`-d`, and a `+ref` refspec (`git push origin +main`), including through a command-line alias |
+| Destructive git | Block | `git reset --hard`, `git clean -f`, `git clean --force` |
+| `SECRET_FILE_READ` | Block | Reading `.env*`, `.dev.vars`, model-provider profiles (`.claude/profiles/*.settings.json`), the client denylist (`.guardrails/*.local`), `/proc/*/environ`, key and certificate files, `~/.npmrc`, `.netrc`, `.pgpass`, credential files, SSH keys, Docker and Kubernetes config (committed example files are exempt) |
+| `GLOB_READ` | Block | A secret reader given a glob the shell would expand to a secret file: a dotfile glob (`cat .en*`, `cat ./.e??`), `.*`, or a glob ending in a key extension (`cat *.pem`). Ordinary globs (`cat src/*.ts`) are not affected |
+| `ENV_DUMP` | Block | `env` and `printenv` wherever they appear as a command, with or without a prefix (`FOO=bar env`, `eval 'env'`, `env -0`); `set`, `export -p`, `declare -x` in command position; dumping `process.env` or `os.environ`. `env FOO=1 cmd` stays allowed |
 | `SECRET_CLIS` | Block | Secret-manager and platform commands that print a secret (1Password, Doppler, Vault, `gh auth token`, cloud secret managers, `kubectl get secret -o`) |
 | `SECRET_VAR_NAMES`, `SECRET_NAME_SHAPE` | Block | Echoing or `printenv` of a configured secret, or any variable named like `*SECRET*`, `*TOKEN*`, `*PASSWORD*`, `*API_KEY*` |
+| `SECRET_VIA_CODE` | Block | The same secrets reached through code or a here-string: `process.env.NAME`, `os.environ["NAME"]`, `os.environ.get("NAME")`, awk `ENVIRON["NAME"]`, `cat <<< "$NAME"`, `tee x <<< "$NAME"`. Presence tests (`[ -n "$NAME" ]`) and non-secret names (`process.env.NODE_ENV`) are not affected |
 | `DEP_WEAKEN` | Block | Overriding the dependency policy for one command: `--min-release-age`, `--before`, `--registry`, `--allow-git`, `--allow-remote`, `--strict-allow-scripts`, `--dangerously-allow-all-scripts`, `npm config set` or `edit` on those keys, `npm_config_*` variables |
+| `GIT_ALIAS` | Ask | Any `git -c alias.<name>=<command>` on the command line, which can stand for commit, push or anything else and so hides the verb from the patterns above |
 | `CONSENT_PATTERNS` | Ask | `git commit`, `git push` (also behind `-C`, `-c`, `--no-pager`); `gh pr create`, `merge`, `close`, `ready`; `gh release create`, `upload`, `edit`, `delete`; `gh repo create`, `edit`, `delete`; `gh workflow run`; `gh api` with POST, PUT, PATCH or DELETE; `publish`, `unpublish`, `deprecate`, `dist-tag` for npm, pnpm, yarn and bun; `changeset publish`; `docker push` |
 | `DEPLOY_PATTERNS` | Ask | Vercel, Netlify, Wrangler, Fly, Firebase, Railway, Heroku rollback, Serverless, EAS, Supabase `db push` and functions deploy, `prisma migrate deploy` and `db push`, `drizzle-kit push` and `migrate` |
 | `REMOTE_CONFIG_PATTERNS` | Ask | Setting or deleting secrets and config on GitHub, Wrangler, Vercel, Fly, Supabase, Heroku |
 | `DEPENDENCY_PATTERNS` | Ask | `npm install <name>`, `npm add`, `pnpm add`, `yarn add`, `bun add`, `bun install <name>`, `pnpm dlx`, `yarn dlx`, `bunx`, `npm approve-scripts` |
 | `ENFORCEMENT_WRITE` | Ask | A shell command that rewrites a guardrail file (`sed -i`, `perl -i`, a redirect, `tee`, `cp`, `mv`, `rm`, `truncate`, `chmod`, `install`, `ln` onto the guard, the checks, the Stop hook, `lefthook.yml`, the CI workflow, `CODEOWNERS`, `.gitleaks.toml`, `.claude/settings.json`, `CLAUDE.md` or `.npmrc`). Reading, running or diffing them is not asked about |
 | No payload | Block | The guard was called without a command to inspect (fails closed) |
+| Misconfigured pattern | Block | A filled pattern that is not a valid regex, or a name list that is not plain identifiers, blocks every command with a "misconfigured" reason until it is fixed. Otherwise an invalid pattern would make grep exit 2 and the check it feeds would silently vanish |
 | Unreadable payload | Block or Ask | No JSON parser, or malformed input: the patterns are matched against the raw payload instead of trusting an empty command |
 | Long commands | Block or Ask | A match is never lost on a long, multi-line command (matching reads the whole command, never a pipe that can be cut short) |
 
@@ -67,9 +71,10 @@ ask, then allow, so a saved "allow" cannot override these. **Proven by:** `guard
 | `Bash(gh pr create *)`, `Bash(gh pr merge *)`, `Bash(gh release create *)` | Ask | Pull requests and releases |
 | `Bash(npm publish *)`, `Bash(pnpm publish *)`, `Bash(yarn publish *)`, `Bash(yarn npm publish *)`, `Bash(bun publish *)` | Ask | Publishing a package |
 | `Edit(.npmrc)` | Ask | The AI changing the dependency policy file. (`Edit` rules cover every file-editing tool; a `Write(...)` rule matches nothing, per Claude Code's own diagnostics) |
-| `Edit(scripts/claude-bash-guard.sh)`, `Edit(scripts/ci-guardrails.sh)`, `Edit(scripts/claude-stop-guardrails.sh)`, `Edit(lefthook.yml)`, `Edit(.github/workflows/ci.yml)`, `Edit(.github/CODEOWNERS)`, `Edit(.gitleaks.toml)`, `Edit(CLAUDE.md)` | Ask | The AI changing an enforcement file with its editing tools. A prompt-injected or over-eager agent would otherwise weaken the guard with one edit, and the guard script is read fresh on every command. The guard's `ENFORCEMENT_WRITE` (section 1) covers the same files from the shell; CODEOWNERS (section 5) covers them in pull requests |
+| `Edit(scripts/claude-bash-guard.sh)`, `Edit(scripts/ci-guardrails.sh)`, `Edit(scripts/claude-stop-guardrails.sh)`, `Edit(lefthook.yml)`, `Edit(.github/workflows/ci.yml)`, `Edit(.github/CODEOWNERS)`, `Edit(.gitleaks.toml)`, `Edit(CLAUDE.md)`, `Edit(.claude/settings.json)` | Ask | The AI changing an enforcement file with its editing tools. A prompt-injected or over-eager agent would otherwise weaken the guard with one edit, and the guard script is read fresh on every command. The guard's `ENFORCEMENT_WRITE` (section 1) covers the same files from the shell; CODEOWNERS (section 5) covers them in pull requests |
 | `disableBypassPermissionsMode: "disable"` | Policy | A session cannot be started in bypass-permissions mode, which skips every prompt including the ask rules above and the guard's ask decisions. Check 8 fails without it |
 | `Read(.env)`, `Read(.env.*)`, `Read(.dev.vars)` (with `Read(!.env.example)`, `Read(!.env.sample)` allowed) | Block | Claude Code's file reader opening environment files |
+| `Read(.claude/profiles/*.settings.json)`, `Read(.guardrails/*.local)` | Block | The file reader opening a model-provider profile (holds a live API key) or the client denylist. The `.example` profiles stay readable |
 | `Read(*.pem)`, `Read(*.key)`, `Read(*.p12)`, `Read(*.pfx)` | Block | Opening private keys and certificates |
 | `Read(~/.npmrc)`, `Read(~/.netrc)`, `Read(~/.pgpass)`, `Read(~/.ssh/id_*)`, `Read(~/.aws/credentials)`, `Read(~/.docker/config.json)`, `Read(~/.kube/config)` | Block | Opening credential files in your home directory |
 | PreToolUse hook | Policy | Wires the command guard (section 1) to every shell command, in exec form through `${CLAUDE_PROJECT_DIR}` so it is found after the AI changes directory, with `onFailure: block` so a guard that cannot start blocks the command rather than letting it run (needs Claude Code 2.1.295 or later; older versions ignore the field). Check 8 fails on a relative path, shell form or a missing `onFailure` |
@@ -84,6 +89,7 @@ of each AI turn (fast mode). Fast mode skips checks 6 and 7. A check that does n
 
 | # | Check | Settings | Skipped when |
 | --- | --- | --- | --- |
+| 0 | Configuration is valid: every filled pattern parses, name lists are plain identifiers, every configured directory exists. A grep error anywhere below (exit 2) is reported as a failure, never read as "no match" | All CONFIG values | Never |
 | 1 | No confidential files in git | `SECRET_FILE_PATTERNS`, `ALLOWED_TRACKED` | Never |
 | 2 | Only approved public variables reach the browser; no server secret names in client code | `PUBLIC_VAR_PREFIX`, `PUBLIC_VAR_ALLOWLIST`, `SECRET_VAR_NAMES`, `CLIENT_DIR` | No public prefix |
 | 3 | Database queries are parameterised | `UNSAFE_SQL`, `SERVER_DIRS` | Never |

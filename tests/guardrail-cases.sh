@@ -15,6 +15,16 @@ ROOT=$(git rev-parse --show-toplevel)
 . "$ROOT/tests/lib/assert.sh"
 cd "$PROJ" || exit 2
 
+echo "── [0] configuration self-check: a broken pattern or a missing directory fails, never passes"
+portable_sed "s#^SECRET_FILE_PATTERNS='.*'#SECRET_FILE_PATTERNS='.*\\.env\$|('#" scripts/ci-guardrails.sh
+expect_reject "an invalid SECRET_FILE_PATTERNS is caught" "SECRET_FILE_PATTERNS is not a valid extended regex"
+portable_sed "s#^UNSAFE_SQL='.*'#UNSAFE_SQL='(\\.unsafe\\(|\\.raw\\('#" scripts/ci-guardrails.sh
+expect_reject "an invalid UNSAFE_SQL is caught" "UNSAFE_SQL is not a valid extended regex"
+portable_sed "s|^SERVER_DIRS='.*'|SERVER_DIRS='src/server-renamed'|" scripts/ci-guardrails.sh
+expect_reject "a configured directory that does not exist is caught" "configured directory 'src/server-renamed' does not exist"
+portable_sed "s|^SECRET_VAR_NAMES='.*'|SECRET_VAR_NAMES='DATABASE_URL; rm -rf x'|" scripts/ci-guardrails.sh
+expect_reject "shell text in a name list is caught" "SECRET_VAR_NAMES must be space-separated variable names"
+
 echo "── [1] confidential files must not be tracked"
 echo "-----BEGIN PRIVATE KEY-----" > deploy.pem; git add -f deploy.pem
 expect_reject "a tracked .pem is caught" "confidential file(s) tracked"
@@ -161,6 +171,10 @@ portable_sed '/"disableBypassPermissionsMode": "disable",/d' .claude/settings.js
 expect_reject "removing the bypass-mode lock is caught" "disableBypassPermissionsMode must be"
 portable_sed '/"Read(.env)",/d' .claude/settings.json
 expect_reject "removing a Read deny rule is caught" "deny rule removed from .claude/settings.json: Read(.env)"
+portable_sed '/"Read(.claude\/profiles\/\*.settings.json)",/d' .claude/settings.json
+expect_reject "removing the profile deny rule is caught" "deny rule removed from .claude/settings.json: Read(.claude/profiles/*.settings.json)"
+node -e 'const f=".claude/settings.json",fs=require("fs");const j=JSON.parse(fs.readFileSync(f,"utf8"));j.permissions.ask=j.permissions.ask.filter(r=>r!=="Edit(.claude/settings.json)");fs.writeFileSync(f,JSON.stringify(j,null,2))'
+expect_reject "removing the settings-file ask rule is caught" "consent rule removed from .claude/settings.json: Edit(.claude/settings.json)"
 portable_sed '/"Bash(gh pr create \*)",/d' .claude/settings.json
 expect_reject "removing a non-sample ask rule is caught" "consent rule removed from .claude/settings.json: Bash(gh pr create *)"
 mkdir -p .claude; printf '{"disableAllHooks": true}\n' > .claude/settings.local.json

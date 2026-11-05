@@ -83,10 +83,13 @@ Edit(lefthook.yml)
 Edit(.github/workflows/ci.yml)
 Edit(.github/CODEOWNERS)
 Edit(.gitleaks.toml)
-Edit(CLAUDE.md)'
+Edit(CLAUDE.md)
+Edit(.claude/settings.json)'
 REQUIRED_DENY_RULES='Read(.env)
 Read(.env.*)
 Read(.dev.vars)
+Read(.claude/profiles/*.settings.json)
+Read(.guardrails/*.local)
 Read(*.pem)
 Read(*.key)
 Read(*.p12)
@@ -120,25 +123,54 @@ skipped(){ echo "$1: SKIPPED ($2)"; }
 skip_note(){ echo "  - SKIPPED ($1)"; }
 FAST="${GUARDRAILS_FAST:-0}"; BASE="${GUARDRAILS_BASE:-origin/main}"
 
+# ---- Configuration self-check. A pattern grep cannot parse makes grep exit 2, and `|| true` or a
+# `&&` chain turns that into "no match": the check prints a tick while scanning nothing. So every
+# filled pattern is tried once, every configured directory must exist, and a failure here is a
+# failure of the run. The same discipline applies below: a grep exit of 2 or more is reported, never
+# treated as a clean result. ----
+echo "[0] Configuration is valid"
+cfg_ok=1
+for v in SECRET_FILE_PATTERNS ALLOWED_TRACKED UNSAFE_SQL STORAGE_PATTERNS BUNDLE_LEAK_PATTERNS PUBLIC_VAR_PREFIX; do
+  val="${!v}"; [ -z "$val" ] && continue
+  grep -qE "$val" <<<"" 2>/dev/null; rc=$?
+  if [ "$rc" -ge 2 ]; then fail "$v is not a valid extended regex (the checks it feeds would scan nothing)"; cfg_ok=0; fi
+done
+for v in SECRET_VAR_NAMES PUBLIC_VAR_ALLOWLIST; do
+  val="${!v}"; [ -z "${val// /}" ] && continue
+  if ! grep -qE '^ *[A-Za-z_][A-Za-z0-9_]*( +[A-Za-z_][A-Za-z0-9_]*)* *$' <<<"$val"; then fail "$v must be space-separated variable names (got: $val)"; cfg_ok=0; fi
+done
+# shellcheck disable=SC2086 # the directory lists are intentionally word-split
+for d in $CLIENT_DIR $SERVER_DIRS; do
+  [ -d "$d" ] || { fail "configured directory '$d' does not exist (the checks that scan it would pass without looking)"; cfg_ok=0; }
+done
+[ "$cfg_ok" -eq 1 ] && ok "patterns parse and configured directories exist"
+
 echo "[1] No confidential/secret files tracked"
-bad=$(git ls-files | grep -iE "$SECRET_FILE_PATTERNS" | grep -vE "$ALLOWED_TRACKED" || true)
-if [ -n "$bad" ]; then fail "confidential file(s) tracked:"; echo "$bad" | sed 's/^/      /'; else ok "none tracked"; fi
+# PIPESTATUS does not survive a command substitution, so the grep's exit code rides along on the
+# last line of the output and is split off again.
+bad=$(git ls-files | grep -iE "$SECRET_FILE_PATTERNS" 2>/dev/null | grep -vE "$ALLOWED_TRACKED"; echo "__rc=${PIPESTATUS[1]}")
+rc=${bad##*__rc=}; bad=${bad%__rc=*}; bad=${bad%$'\n'}
+if [ "$rc" -ge 2 ]; then fail "could not apply SECRET_FILE_PATTERNS (failing closed)"
+elif [ -n "$bad" ]; then fail "confidential file(s) tracked:"; echo "$bad" | sed 's/^/      /'; else ok "none tracked"; fi
 
 if [ -n "$PUBLIC_VAR_PREFIX" ]; then
   echo "[2] Only allowlisted ${PUBLIC_VAR_PREFIX}* are public; no server secrets in $CLIENT_DIR"
   # shellcheck disable=SC2086 # allowlist is intentionally word-split into lines
   allow=$(printf '%s\n' $PUBLIC_VAR_ALLOWLIST)
   # shellcheck disable=SC2086 # CLIENT_DIR is intentionally word-split into multiple paths
-  pub=$(grep -rhoE "${PUBLIC_VAR_PREFIX}[A-Z0-9_]+" $CLIENT_DIR 2>/dev/null | sort -u | grep -vxF "$allow" || true)
-  if [ -n "$pub" ]; then fail "disallowed public var(s) in $CLIENT_DIR:"; echo "$pub" | sed 's/^/      /'; else ok "only allowlisted public vars"; fi
+  pub=$(grep -rhoE "${PUBLIC_VAR_PREFIX}[A-Z0-9_]+" $CLIENT_DIR 2>/dev/null | sort -u | grep -vxF "$allow"; echo "__rc=${PIPESTATUS[0]}")
+  rc=${pub##*__rc=}; pub=${pub%__rc=*}; pub=${pub%$'\n'}
+  if [ "$rc" -ge 2 ]; then fail "could not scan $CLIENT_DIR for public vars (failing closed)"
+  elif [ -n "$pub" ]; then fail "disallowed public var(s) in $CLIENT_DIR:"; echo "$pub" | sed 's/^/      /'; else ok "only allowlisted public vars"; fi
   # An empty name list must not become an empty regex, which matches every line.
   if [ -z "${SECRET_VAR_NAMES// /}" ]; then
     skip_note "no SECRET_VAR_NAMES configured; the guard's name-shape patterns still apply"
   else
     names=$(printf '%s' "$SECRET_VAR_NAMES" | tr ' ' '|')
     # shellcheck disable=SC2086
-    sec=$(grep -rnE "$names" $CLIENT_DIR 2>/dev/null || true)
-    if [ -n "$sec" ]; then fail "server-secret name(s) in $CLIENT_DIR:"; echo "$sec" | sed 's/^/      /'; else ok "no server-secret names in $CLIENT_DIR"; fi
+    sec=$(grep -rnE "$names" $CLIENT_DIR 2>/dev/null); rc=$?
+    if [ "$rc" -ge 2 ]; then fail "could not scan $CLIENT_DIR for secret names (failing closed)"
+    elif [ -n "$sec" ]; then fail "server-secret name(s) in $CLIENT_DIR:"; echo "$sec" | sed 's/^/      /'; else ok "no server-secret names in $CLIENT_DIR"; fi
   fi
 else
   skipped "[2] Public-env and client-secret scan" "no PUBLIC_VAR_PREFIX configured"
@@ -146,13 +178,15 @@ fi
 
 echo "[3] Parameterised SQL only (no unsafe) in $SERVER_DIRS"
 # shellcheck disable=SC2086 # SERVER_DIRS is intentionally word-split into multiple paths
-unsafe=$(grep -rnE "$UNSAFE_SQL" $SERVER_DIRS 2>/dev/null || true)
-if [ -n "$unsafe" ]; then fail "non-parameterised SQL:"; echo "$unsafe" | sed 's/^/      /'; else ok "all SQL parameterised"; fi
+unsafe=$(grep -rnE "$UNSAFE_SQL" $SERVER_DIRS 2>/dev/null); rc=$?
+if [ "$rc" -ge 2 ]; then fail "could not scan $SERVER_DIRS for raw SQL (failing closed)"
+elif [ -n "$unsafe" ]; then fail "non-parameterised SQL:"; echo "$unsafe" | sed 's/^/      /'; else ok "all SQL parameterised"; fi
 
 echo "[4] No browser storage in $CLIENT_DIR"
 # shellcheck disable=SC2086
-store=$(grep -rnE "$STORAGE_PATTERNS" $CLIENT_DIR 2>/dev/null || true)
-if [ -n "$store" ]; then fail "browser storage in $CLIENT_DIR:"; echo "$store" | sed 's/^/      /'; else ok "none"; fi
+store=$(grep -rnE "$STORAGE_PATTERNS" $CLIENT_DIR 2>/dev/null); rc=$?
+if [ "$rc" -ge 2 ]; then fail "could not scan $CLIENT_DIR for browser storage (failing closed)"
+elif [ -n "$store" ]; then fail "browser storage in $CLIENT_DIR:"; echo "$store" | sed 's/^/      /'; else ok "none"; fi
 
 if [ -n "$MIGRATIONS_DIR" ]; then
   echo "[5] Migrations are additive (existing files unchanged)"
@@ -173,8 +207,9 @@ if [ -n "$BUNDLE_DIR" ]; then
   echo "[6] No secrets in the built bundle ($BUNDLE_DIR)"
   if [ "$FAST" = "1" ]; then skip_note "fast mode"
   elif [ -d "$BUNDLE_DIR" ]; then
-    leak=$(grep -rnE "$BUNDLE_LEAK_PATTERNS" "$BUNDLE_DIR" 2>/dev/null || true)
-    if [ -n "$leak" ]; then fail "secret-like string(s) in $BUNDLE_DIR:"; echo "$leak" | sed 's/^/      /'; else ok "bundle clean"; fi
+    leak=$(grep -rnE "$BUNDLE_LEAK_PATTERNS" "$BUNDLE_DIR" 2>/dev/null); rc=$?
+    if [ "$rc" -ge 2 ]; then fail "could not scan $BUNDLE_DIR (failing closed)"
+    elif [ -n "$leak" ]; then fail "secret-like string(s) in $BUNDLE_DIR:"; echo "$leak" | sed 's/^/      /'; else ok "bundle clean"; fi
   else skip_note "no $BUNDLE_DIR yet, build first"; fi
 else
   skipped "[6] Built-bundle secret scan" "no BUNDLE_DIR configured"

@@ -25,7 +25,7 @@ Every change to these files goes through a pull request and review, like any oth
 | `CLAUDE.md` | The written rules the AI reads first |
 | `scripts/claude-bash-guard.sh` | What the AI may run: block, ask or allow |
 | `.claude/settings.json` | Claude Code's own permission rules and hook wiring |
-| `scripts/ci-guardrails.sh` | The twelve guardrail checks |
+| `scripts/ci-guardrails.sh` | The guardrail checks: a configuration self-check (0) and checks 1 to 12 |
 | `.npmrc` | The dependency policy: release cooldown, registry-only packages, reviewed install scripts |
 | `osv-scanner.toml` | Accepted vulnerability exceptions, each with an expiry date (only if you need one) |
 | `.gitleaks.toml` | The secret scanner's rules |
