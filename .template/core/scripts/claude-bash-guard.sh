@@ -107,7 +107,7 @@ DEPENDENCY_PATTERNS+="|${B}npm[[:space:]]+approve-scripts"
 # cover the editing tools; this covers sed -i, redirects, tee, cp, mv, rm and the like on the same
 # files. Asked, not blocked: maintaining the guardrails is legitimate work, but it is never work the
 # agent does on its own say-so.
-ENFORCEMENT_FILES='(scripts/(claude-bash-guard|ci-guardrails|claude-stop-guardrails)\.sh|lefthook\.yml|\.github/workflows/ci\.yml|\.github/CODEOWNERS|\.gitleaks\.toml|\.claude/settings\.json|CLAUDE\.md|\.npmrc)'
+ENFORCEMENT_FILES='(scripts/(claude-bash-guard|ci-guardrails|claude-stop-guardrails)\.sh|lefthook\.yml|\.github/workflows/ci\.yml|\.github/CODEOWNERS|\.gitleaks\.toml|\.claude/settings\.json|CLAUDE\.md|\.npmrc|\.mcp\.json)'
 ENFORCEMENT_WRITE="${B}(sed[^|;&]*[[:space:]]-[a-zA-Z]*i|perl[^|;&]*[[:space:]]-[a-zA-Z]*i|tee|cp|mv|rm|truncate|chmod|install|ln)[[:space:]][^|;&]*${ENFORCEMENT_FILES}([[:space:]\"'|;&)]|$)"
 ENFORCEMENT_WRITE+="|>>?[[:space:]]*[\"']?${ENFORCEMENT_FILES}([[:space:]\"'|;&)]|$)"
 

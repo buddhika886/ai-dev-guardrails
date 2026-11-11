@@ -84,7 +84,9 @@ Edit(.github/workflows/ci.yml)
 Edit(.github/CODEOWNERS)
 Edit(.gitleaks.toml)
 Edit(CLAUDE.md)
-Edit(.claude/settings.json)'
+Edit(.claude/settings.json)
+Edit(.mcp.json)
+mcp__*'
 REQUIRED_DENY_RULES='Read(.env)
 Read(.env.*)
 Read(.dev.vars)
@@ -292,6 +294,9 @@ else
       const j = read(file), p = j.permissions || {}
       if (j.disableAllHooks === true) errs.push(`${file}: disableAllHooks is true, which switches off the bash guard`)
       if (p.defaultMode === "bypassPermissions") errs.push(`${file}: permissions.defaultMode is bypassPermissions, which skips every consent prompt`)
+      // MCP servers add tools the agent can call, outside the bash guard. Claude Code asks before
+      // connecting a server listed in .mcp.json; this setting approves every one of them unseen.
+      if (j.enableAllProjectMcpServers === true) errs.push(`${file}: enableAllProjectMcpServers is true, which connects every MCP server in .mcp.json without asking`)
     }
 
     // Permission creep: an allow rule in either file that matches a consent sample means a saved

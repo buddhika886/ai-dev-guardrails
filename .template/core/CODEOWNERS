@@ -11,3 +11,4 @@
 /.gitleaks.toml {{CODEOWNERS}}
 /.npmrc {{CODEOWNERS}}
 /CLAUDE.md {{CODEOWNERS}}
+/.mcp.json {{CODEOWNERS}}

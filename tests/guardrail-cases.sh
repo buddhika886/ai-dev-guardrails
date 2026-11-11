@@ -201,6 +201,16 @@ portable_sed '/"Edit(.npmrc)",/d' .claude/settings.json
 expect_reject "removing the ask rule for editing .npmrc is caught" "consent rule removed from .claude/settings.json: Edit(.npmrc)"
 local_allow '["Bash(npm install *)"]'
 expect_reject "a local allow that pre-approves adding packages is caught" "permission creep"; clean_local
+node -e 'const f=".claude/settings.json",fs=require("fs");const j=JSON.parse(fs.readFileSync(f,"utf8"));j.permissions.ask=j.permissions.ask.filter(r=>r!=="mcp__*");fs.writeFileSync(f,JSON.stringify(j,null,2))'
+expect_reject "removing the MCP ask rule is caught" "consent rule removed from .claude/settings.json: mcp__*"
+node -e 'const f=".claude/settings.json",fs=require("fs");const j=JSON.parse(fs.readFileSync(f,"utf8"));j.permissions.ask=j.permissions.ask.filter(r=>r!=="Edit(.mcp.json)");fs.writeFileSync(f,JSON.stringify(j,null,2))'
+expect_reject "removing the .mcp.json ask rule is caught" "consent rule removed from .claude/settings.json: Edit(.mcp.json)"
+node -e 'const f=".claude/settings.json",fs=require("fs");const j=JSON.parse(fs.readFileSync(f,"utf8"));j.enableAllProjectMcpServers=true;fs.writeFileSync(f,JSON.stringify(j,null,2))'
+expect_reject "auto-approving project MCP servers in settings.json is caught" "enableAllProjectMcpServers is true"
+mkdir -p .claude; printf '{"enableAllProjectMcpServers": true}\n' > .claude/settings.local.json
+expect_reject "auto-approving project MCP servers in the local file is caught" "enableAllProjectMcpServers is true"; clean_local
+mkdir -p .claude; printf '{"enableAllProjectMcpServers": false, "enabledMcpjsonServers": ["docs"]}\n' > .claude/settings.local.json
+expect_accept "approving one named MCP server is accepted" "no allow rule pre-approves a consent command"; clean_local
 
 echo "── [9] client denylist: blocks, and never prints the name it protects"
 mkdir -p .guardrails

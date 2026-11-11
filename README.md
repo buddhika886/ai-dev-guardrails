@@ -162,6 +162,8 @@ No safety system is complete. The gaps, plainly:
   final word: protect your `main` branch so they must pass.
 - A leaked secret cannot be un-leaked. If one reaches the chat history, change it.
 - Dependency rules are set up for npm. The client-name check scans files, not commit messages.
+- MCP servers add tools that the guard cannot read. Every MCP tool call asks first, but a server
+  you add for yourself, outside the project, is not reviewed by anyone else.
 
 ---
 

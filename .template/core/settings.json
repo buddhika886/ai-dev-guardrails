@@ -21,7 +21,9 @@
       "Edit(.github/CODEOWNERS)",
       "Edit(.gitleaks.toml)",
       "Edit(CLAUDE.md)",
-      "Edit(.claude/settings.json)"
+      "Edit(.claude/settings.json)",
+      "Edit(.mcp.json)",
+      "mcp__*"
     ],
     "deny": [
       "Read(.env)",

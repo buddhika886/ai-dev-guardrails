@@ -112,6 +112,15 @@ Every package added is code from a stranger that runs with this project's permis
   signatures. Fix a finding by upgrading; an accepted exception goes in `osv-scanner.toml` with an
   `ignoreUntil` date and a reason, in a reviewed change.
 
+## MCP servers
+
+An MCP server gives the AI new tools, and those tools run outside the bash guard.
+
+- Add a server only when the task needs it, from a source you trust, and say why in the commit.
+  Project servers live in `.mcp.json`; changing it asks every time and needs an owner's review.
+- Every MCP tool call asks first (`mcp__*`). Approve each call on what it does, not on the server's
+  name. Never set `enableAllProjectMcpServers`; guardrail check [8] fails if it is on.
+
 ## Evidence standard (hard rule)
 
 Claims of completion are not accepted; observable output is.
@@ -140,6 +149,8 @@ Say these plainly in any security write-up rather than describing the controls a
 - The bash guard matches command text. It cannot see through environment-variable indirection,
   scripts it is asked to run, or a program invoked in an unexpected form. Process is the control.
 - Agent hooks gate the agent only. A human's `!` commands and terminal are not inspected.
+- MCP servers you add at user level (`~/.claude.json`) sit outside the repository, so CODEOWNERS
+  and review do not see them. The `mcp__*` ask rule still prompts for their tools.
 - Nothing here can recall a secret once it has reached the transcript. Rotation is the only remedy.
 - The client denylist sees what it is given: CI enforces it only when `GUARDRAILS_DENYLIST` is set,
   and it does not scan commit messages or history.
