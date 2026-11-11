@@ -394,6 +394,15 @@ AGPL-3.0) suit your organisation before adopting them.
 Add any of these as an extra CI job or step. Pin each Action to a full commit SHA, as the rest of
 the workflow does, and keep secrets in repository secrets, never in the workflow file.
 
+### The software bill of materials
+
+Every CI run on GitHub attaches an `sbom` file: a CycloneDX list of every package in
+`package-lock.json`, with versions and licences. To check whether a project ships a package named in
+an advisory, open the latest run on `main`, download `sbom`, and search it for the name and version.
+To keep the files longer than the repository's artifact retention (90 days by default), raise
+`retention-days` on the upload step in `.github/workflows/ci.yml`. The step records; it does not
+block, so there is nothing to configure for it to pass.
+
 ---
 
 ## 6. Local hooks and CI
