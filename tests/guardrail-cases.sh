@@ -31,6 +31,9 @@ expect_reject "a tracked .pem is caught" "confidential file(s) tracked"
 printf 'DATABASE_URL=postgres://u:p@localhost/db\n' > .env.local; git add -f .env.local
 expect_reject "a tracked .env.local is caught" "confidential file(s) tracked"
 expect_accept "the allowlisted .env.example is not flagged" "none tracked"
+mkdir -p .claude; printf '{"permissions":{"allow":["Bash(npm test)"]}}\n' > .claude/settings.local.json; git add -f .claude/settings.local.json
+expect_reject "tracked Claude Code local settings are caught" "Claude Code's local settings are tracked"; rm -rf .claude/settings.local.json
+expect_accept "untracked local settings are fine" "Claude Code's local settings are not tracked"
 
 echo "── [2] public-env allowlist and no server secrets in client code"
 printf '\nconst k = process.env.NEXT_PUBLIC_STRIPE_KEY\n' >> src/app/page.tsx
@@ -145,6 +148,15 @@ export CI=false
 clean_local() { rm -rf .claude/settings.local.json .guardrails out; }
 clean_local   # out/ is ignored too; the bundle cases above leave a chunk behind
 local_allow() { mkdir -p .claude; printf '{"permissions":{"allow":%s}}\n' "$1" > .claude/settings.local.json; }
+# expect_hidden <label> <expected substring> <secret>: rejected, and the secret never appears in
+# the output, which reaches the transcript and the CI log.
+expect_hidden() {
+  local out rc
+  out=$(guardrails_out); rc=$?
+  if [ "$rc" -ne 0 ] && grep -qF "$2" <<<"$out" && ! grep -qF "$3" <<<"$out"; then t_pass "$1"
+  else t_fail "$1 (rc=$rc, expected \"$2\" and no \"$3\")" "$out"; fi
+  reset_project
+}
 
 echo "── [8] agent consent controls intact, and no permission creep"
 expect_accept "the installed settings pass" "no allow rule pre-approves a consent command"
@@ -211,6 +223,43 @@ mkdir -p .claude; printf '{"enableAllProjectMcpServers": true}\n' > .claude/sett
 expect_reject "auto-approving project MCP servers in the local file is caught" "enableAllProjectMcpServers is true"; clean_local
 mkdir -p .claude; printf '{"enableAllProjectMcpServers": false, "enabledMcpjsonServers": ["docs"]}\n' > .claude/settings.local.json
 expect_accept "approving one named MCP server is accepted" "no allow rule pre-approves a consent command"; clean_local
+
+echo "── sandbox chosen at bootstrap (scenario A: npm and GitHub)"
+if node -e 'const j=JSON.parse(require("fs").readFileSync(".claude/settings.json","utf8"));const d=j.sandbox&&j.sandbox.network.allowedDomains;process.exit(j.sandbox&&j.sandbox.enabled===true&&d.join(" ")==="registry.npmjs.org github.com *.github.com"&&j.permissions.ask.includes("Bash(dangerouslyDisableSandbox:true)")?0:1)'; then
+  t_pass "the sandbox is on with npm and GitHub allowed, and a retry outside it asks"
+else t_fail "sandbox settings after install" "$(cat .claude/settings.json)"; fi
+expect_accept "check 8 accepts the sandbox settings" "no allow rule pre-approves a consent command"
+
+echo "── web pages chosen at bootstrap (scenario A: ask every time)"
+if node -e 'const j=JSON.parse(require("fs").readFileSync(".claude/settings.json","utf8"));process.exit(j.permissions.ask.includes("WebFetch")?0:1)'; then
+  t_pass "every web fetch asks"
+else t_fail "web-fetch settings after install" "$(cat .claude/settings.json)"; fi
+local_allow '["WebFetch(domain:evil.example)"]'
+expect_reject "a site saved through do-not-ask-again is caught" "saved web-fetch approval(s) outside the reviewed list"; clean_local
+local_allow '["Bash(curl *)"]'
+expect_reject "a saved allow for curl is caught as creep" "permission creep"; clean_local
+local_allow '["Bash(curl localhost:3000)"]'
+expect_accept "a saved allow for a local curl is accepted" "no web-fetch approval saved outside the reviewed list"; clean_local
+
+echo "── [8] credentials saved in permission rules are caught, and never printed"
+local_allow '["Bash(PGPASSWORD=hunter2pw psql -h localhost -c \"select 1\")"]'
+expect_hidden "an inline database password is caught" "credential saved in a permission rule" "hunter2pw"; clean_local
+local_allow '["Bash(sshpass -p s3cretpw ssh deploy@box)"]'
+expect_hidden "an sshpass password is caught" "sshpass password" "s3cretpw"; clean_local
+local_allow '["Bash(curl -H \"Authorization: Bearer abcTOKEN123\" https://api.example.com)"]'
+expect_hidden "a bearer header is caught" "authorisation header" "abcTOKEN123"; clean_local
+local_allow '["Bash(psql postgres://app:dbpass99@localhost/app)"]'
+expect_hidden "credentials in a URL are caught" "credentials in a URL" "dbpass99"; clean_local
+local_allow '["Bash(curl -H x-key:sk-ant-api03-zzzzzzzz https://api.example.com)"]'
+expect_hidden "an API key shape is caught" "API key shape" "sk-ant-api03-zzzzzzzz"; clean_local
+local_allow '["Bash(git push https://bot:ghtok777@github.com/acme/app.git)"]'
+expect_hidden "a token in a push URL is caught" "credentials in a URL" "ghtok777"; clean_local
+mkdir -p .claude; printf '{"permissions":{"ask":["Bash(DB_PASSWORD=askpw4242 npm run seed)"]}}\n' > .claude/settings.local.json
+expect_hidden "a credential in an ask rule is caught too" "permissions.ask rule #1" "askpw4242"; clean_local
+# SC2016: $PGPASSWORD is literal on purpose; a saved rule that refers to a variable is not a credential.
+# shellcheck disable=SC2016
+local_allow '["Bash(PGPASSWORD=$PGPASSWORD psql -h localhost)", "Bash(docker login --password-stdin *)", "Bash(npm test -- --token-file=x)", "Bash(npx jest --passWithNoTests=true)", "Bash(MAX_TOKENS=100 node bench.js)", "Bash(SKIP_TOKEN_CHECK=true npm test)"]'
+expect_accept "variable references and ordinary flags are accepted" "no credential saved in a permission rule"; clean_local
 
 echo "── [9] client denylist: blocks, and never prints the name it protects"
 mkdir -p .guardrails

@@ -82,6 +82,24 @@ ensure_ignored '.guardrails/*.local'
 ensure_ignored '.claude/settings.local.json'
 ensure_ignored '.claude/profiles/*.settings.json'
 ensure_ignored '.claude/openrouter.settings.json'
+# Step 4.1, sandbox (Q6): merged into the parsed settings, never edited as text.
+node -e '
+const fs = require("fs"), [mode, domains] = process.argv.slice(1), f = ".claude/settings.json"
+if (mode === "off") process.exit(0)
+const allowed = { "npm-github": ["registry.npmjs.org", "github.com", "*.github.com"], isolated: [] }[mode]
+  ?? domains.split(/\s+/).filter(Boolean)
+const j = JSON.parse(fs.readFileSync(f, "utf8"))
+j.sandbox = { enabled: true, network: { allowedDomains: allowed } }
+j.permissions.ask.push("Bash(dangerouslyDisableSandbox:true)")
+fs.writeFileSync(f, JSON.stringify(j, null, 2) + "\n")' "$(value SANDBOX_MODE)" "$(value SANDBOX_DOMAINS)"
+# Step 4.1, web pages (Q7).
+node -e '
+const fs = require("fs"), [mode, sites] = process.argv.slice(1), f = ".claude/settings.json"
+const j = JSON.parse(fs.readFileSync(f, "utf8"))
+if (mode === "ask") j.permissions.ask.push("WebFetch")
+else if (mode === "block") j.permissions.deny.push("WebFetch")
+else j.permissions.allow = sites.split(/\s+/).filter(Boolean).map((s) => "WebFetch(domain:" + s + ")")
+fs.writeFileSync(f, JSON.stringify(j, null, 2) + "\n")' "$(value WEBFETCH_MODE)" "$(value WEBFETCH_SITES)"
 
 # ---- bootstrap Step 4.2: copy the TypeScript fragment ----
 cp "$T/lang/ts/biome.json"             biome.json

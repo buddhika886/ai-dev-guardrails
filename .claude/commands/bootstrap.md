@@ -207,6 +207,51 @@ none for the core guardrails only."
 - Security tier: switched on already if you said yes to personal data; choosing it here records the
   choice (its files arrive in a later release)
 
+### Q6. Sandbox
+
+**Q6. Sandbox.** "Should the AI's shell commands run inside Claude Code's sandbox? The sandbox is a
+wall the operating system puts around each command, so it can only reach this project's files and
+the internet addresses you allow. It is your choice: no check enforces it, and you can change it
+later in `.claude/settings.json`."
+- Sandbox, with npm and GitHub allowed (recommended): like a building pass that opens two doors.
+  Commands can reach npm and GitHub, and any other address asks you first. This changes only where
+  commands can connect: commits, pushes and new packages still ask you every time, as before.
+  Commands that read files without naming them, such as `grep -r`, cannot reach files outside the
+  project
+- Sandbox, no internet: every command that needs the internet asks you first, including installs
+  and pushes
+- Sandbox, with addresses I list: I'll ask for them next
+- No sandbox: commands run with your normal access. The command guard and the checks still apply,
+  but a command that reads files without naming them (such as `grep -r`) is not stopped
+
+This question has four options, so its explanation sits in the first option's description rather
+than a "Not sure, explain this" option.
+
+**Q6-domains. Only if "addresses I list".** "Which internet addresses may commands reach?
+Space-separated, for example `registry.npmjs.org github.com *.github.com`." (text answer) Each must
+match `^(\*\.)?[A-Za-z0-9.-]+(:[0-9]+)?$`; re-ask for any that does not.
+
+### Q7. Web pages
+
+**Q7. Web pages.** "When the AI wants to read a web page with its web-fetch tool, what should happen?
+A web page can carry hidden instructions or bad code, so this decides how much you see first.
+Fetches from the shell (`curl`, `wget`) always ask, except to this machine (`localhost`)."
+- Ask before every web page (recommended): each fetch shows you the address first, and "don't ask
+  again" cannot switch that off
+- Allow sites I list, ask for the rest: I'll ask for the sites next. The list lives in
+  `.claude/settings.json`, where changes are reviewed; a site saved through "don't ask again"
+  makes guardrail check [8] fail
+- Block web pages: the AI cannot fetch any web page
+- Not sure, explain this
+
+**Explain:** "It is like a visitor list at reception. Asking every time means you see each address
+before the AI goes there. A list of sites lets regulars in without asking. Blocking keeps
+everyone out. Not sure? Choose asking every time."
+
+**Q7-sites. Only if "sites I list".** "Which sites? Space-separated, for example
+`docs.github.com nextjs.org`." (text answer) Each must match `^(\*\.)?[A-Za-z0-9.-]+$`; re-ask for any
+that does not.
+
 ### Ownership and licence
 
 **O1. Source documents.** "Are there documents the AI should treat as the source of truth, such as
@@ -293,6 +338,15 @@ Do these in order. Show the user what you are doing at each step.
      missing; create `.gitignore` if there is none). The first keeps the client denylist out of git;
      the second keeps per-machine permission approvals out of the shared repo; the last two keep a
      developer's model-provider keys out (the fourth is the OpenRouter profile's old location).
+   - **Sandbox (Q6).** Unless the answer was "no sandbox", add to `.claude/settings.json` a
+     `sandbox` block with `"enabled": true` and `network.allowedDomains` set to
+     `["registry.npmjs.org", "github.com", "*.github.com"]` (npm and GitHub), `[]` (no internet) or
+     the listed addresses, and append `Bash(dangerouslyDisableSandbox:true)` to `permissions.ask`
+     so a command retried outside the sandbox always asks. Parse and rewrite the JSON; never edit
+     it as text. For "no sandbox", add nothing.
+   - **Web pages (Q7).** In `.claude/settings.json`: for "ask", append `WebFetch` to
+     `permissions.ask`; for "sites I list", set `permissions.allow` to one `WebFetch(domain:<site>)`
+     per site; for "block", append `WebFetch` to `permissions.deny`. Parse and rewrite the JSON.
 2. **Copy the language fragment** (TypeScript): `biome.json`, `.nvmrc`, `.npmrc` to the repo root;
    `eslint-escape-hatch.md` and `tsconfig-note.md` → `docs/`. Merge `package-scripts.json`'s
    `scripts` block into `package.json` (create a minimal `package.json` first if none exists). Leave
@@ -453,6 +507,9 @@ empty. Prod safety by process still applies.
     > From now on I ask before anything leaves this machine, I'm blocked from printing secrets or
     > touching production, and the checks run on every commit, push and pull request.
     > Next: <the one-time GitHub setup, if on GitHub> <and the client denylist, if a client project>.
+    > <If a sandbox was chosen: After restarting, type /sandbox once to confirm it is running.
+    > On Linux and WSL2 it needs bubblewrap and socat installed; on native Windows commands run
+    > without it.>
     > How it all works: docs/five-layers.md. To change a rule: docs/configuring-rules.md.
 
 ## Step 6: Failure discipline

@@ -103,6 +103,16 @@ DEPENDENCY_PATTERNS+="|${B}bun[[:space:]]+(install|i)${PKG_FLAGS}[[:space:]]+[^-
 DEPENDENCY_PATTERNS+="|${B}(pnpm|yarn)[[:space:]]+dlx([[:space:]]|$)|${B}bunx([[:space:]]|$)"
 DEPENDENCY_PATTERNS+="|${B}npm[[:space:]]+approve-scripts"
 
+# Fetching from the network from the shell: curl, wget and HTTPie (http, https, xh). Asked: a
+# fetch can bring in instructions or code from anywhere, and can carry data out. Claude's own
+# web-fetch tool is governed by .claude/settings.json (bootstrap question Q7); this is the shell's
+# counterpart. Sending a secret file with curl or wget (`-d @.env`) is blocked, not asked, by the
+# secret-file rules above.
+NETWORK_FETCH="${B}(curl|wget|http|https|xh)[[:space:]]"
+# This machine's own addresses. A plain curl or wget to them only is exempt (see local_fetch), so
+# `curl localhost:3000` runs without asking. Add a host only if it can never mean another machine.
+LOCAL_HOSTS='(localhost|127\.0\.0\.1|\[::1\])'
+
 # Rewriting an enforcement file from the shell. The Edit and Write ask rules in .claude/settings.json
 # cover the editing tools; this covers sed -i, redirects, tee, cp, mv, rm and the like on the same
 # files. Asked, not blocked: maintaining the guardrails is legitimate work, but it is never work the
@@ -123,11 +133,11 @@ DEP_WEAKEN+="|npm_config_(min_release_age|before|allow_git|allow_remote|strict_a
 # Secret disclosure. These print a secret into the session transcript, where it is stored and can
 # outlive any rotation. Blocked, not redacted: a home-made redaction pipe that fails open leaks the
 # value it was meant to hide, and nothing downstream can take it back.
-SECRET_READERS='(cat|bat|less|more|head|tail|nl|strings|xxd|od|hexdump|grep|egrep|fgrep|rg|ag|awk|sed|cut|sort|uniq|diff|base64|jq|yq)'
+SECRET_READERS='(cat|bat|less|more|head|tail|nl|strings|xxd|od|hexdump|grep|egrep|fgrep|rg|ag|awk|sed|cut|sort|uniq|diff|base64|jq|yq|curl|wget)'
 # SC2016: $HOME here is a literal regex alternative, matched in the command text, not expanded.
 # shellcheck disable=SC2016
 SECRET_FILES='(\.env(\.[A-Za-z0-9_-]+)*|\.dev\.vars|\.claude/profiles/[^[:space:]]*\.settings\.json|\.guardrails/[^[:space:]]*\.local|/proc/(self|[0-9]+)/environ|(~|\$HOME|\$\{HOME\})/\.npmrc|\.netrc|\.pgpass|credentials(\.json)?|[^[:space:]]+\.pem|[^[:space:]]+\.key|[^[:space:]]+\.p12|[^[:space:]]+\.pfx|id_(rsa|dsa|ecdsa|ed25519)|\.docker/config\.json|\.kube/config)'
-SECRET_FILE_READ="${B}${SECRET_READERS}([[:space:]][^|;&]*)?[[:space:]/=<\"']${SECRET_FILES}([[:space:]\"'|;&)>]|$)"
+SECRET_FILE_READ="${B}${SECRET_READERS}([[:space:]][^|;&]*)?[[:space:]/=<@\"']${SECRET_FILES}([[:space:]\"'|;&)>]|$)"
 SECRET_FILE_READ+="|<[[:space:]]*${SECRET_FILES}([[:space:]\"'|;&)>]|$)"
 # The shell expands globs after the guard has looked, so `cat .en*` reads .env while the text never
 # says so. A secret reader given a dotfile glob, a glob ending in a key extension, or `.*` is blocked.
@@ -268,6 +278,25 @@ fi
 
 # ======== ASK: fresh consent every time ========
 
+# local_fetch <cmd>: true only for one plain curl or wget command whose only hosts are this
+# machine's own. Strict on purpose: a second command, a redirect, a variable, a proxy, resolve or
+# config flag, a secret file, or any other host or IP anywhere in the text means it asks instead.
+local_fetch() {
+  local c="$1" rest
+  grep -qE '^[[:space:]]*(curl|wget)[[:space:]]' <<<"$c" || return 1
+  [ "$(printf '%s' "$c" | wc -l | tr -d ' ')" = "0" ] || return 1
+  # SC2016: $ is literal here, one of the characters that rule out the exemption (a variable could
+  # expand to any host).
+  # shellcheck disable=SC2016
+  grep -qE '[;&|`<>$()\\]' <<<"$c" && return 1
+  grep -qE '(^|[[:space:]])(-K|--config|--input-file|-e|--execute|-x|--proxy|--preproxy|--resolve|--connect-to|--doh-url|--socks[0-9a-z]*)([=[:space:]]|$)' <<<"$c" && return 1
+  grep -qiE "$SECRET_FILES" <<<"$c" && return 1
+  grep -qiE "(^|[[:space:]/@\"'])${LOCAL_HOSTS}([:/[:space:]\"']|$)" <<<"$c" || return 1
+  rest=$(tr '[:upper:]' '[:lower:]' <<<"$c" | sed -E "s#(https?://)?${LOCAL_HOSTS}##g")
+  grep -qE '://|[a-z0-9-]+\.[a-z0-9-]+' <<<"$rest" && return 1
+  return 0
+}
+
 # Emits a PreToolUse "ask" decision. The reason is built from fixed strings with no quotes or
 # backslashes, so it is valid JSON by construction and needs no encoder on PATH.
 ask() {
@@ -289,6 +318,9 @@ if grep -qiE "$REMOTE_CONFIG_PATTERNS" <<<"$cmd"; then
 fi
 if grep -qiE "$DEPENDENCY_PATTERNS" <<<"$cmd"; then
   ask "Consent required: this adds a dependency or approves install scripts. Check the package name is the one you meant (assistants invent plausible names), that it is maintained, and that the project needs it."
+fi
+if grep -qiE "$NETWORK_FETCH" <<<"$cmd" && ! local_fetch "$cmd"; then
+  ask "Consent required: this fetches from the network from the shell (curl, wget or HTTPie). Check the address: a fetch can bring in instructions or code, and can carry data out. Requests to this machine only (localhost) do not ask."
 fi
 if grep -qE "$ENFORCEMENT_WRITE" <<<"$cmd"; then
   ask "Consent required: this rewrites a guardrail file (the command guard, the checks, the hooks, CI, CODEOWNERS, the secret-scanner config, CLAUDE.md or .npmrc). Changing the rules is a reviewed decision, never a side effect of a task; never weaken a check to make it pass."

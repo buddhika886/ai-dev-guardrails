@@ -34,6 +34,10 @@
   "PROD_ENV_VAR_NAMES": "",
 
   "GOVERNANCE_ENABLED": "off",
+  "SANDBOX_MODE": "off",
+  "SANDBOX_DOMAINS": "",
+  "WEBFETCH_MODE": "list",
+  "WEBFETCH_SITES": "docs.github.com nodejs.org",
   "SIGNOFF_ENABLED": "off",
   "BOOTSTRAP_DATE": "2026-10-26",
   "CODEOWNERS": "@sig-lib-maintainer",

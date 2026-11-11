@@ -40,6 +40,21 @@ GOVERNANCE_ENABLED='{{GOVERNANCE_ENABLED}}' # 'on' or 'off': whether the governa
 # naming the client would itself leak the name. CI reads the same list from the GUARDRAILS_DENYLIST
 # environment variable (a repository secret) instead.
 DENYLIST_FILE='.guardrails/denylist.local'
+# Claude Code's per-machine settings. "Yes, and don't ask again" saves the whole approved command
+# here, password included, so the file must never be committed (public repositories have leaked
+# thousands of credentials this way). Checked by [1] whatever SECRET_FILE_PATTERNS says.
+AGENT_LOCAL_FILES='(^|/)\.claude/settings\.local\.json$'
+# Credential shapes that must not sit inside a saved permission rule, one "label<TAB>regex" per line
+# (JavaScript regex, case-insensitive). A value that is a variable reference ($NAME) is not a
+# credential and is not matched. Checked by [8]; the rule itself is never printed.
+SAVED_SECRET_SHAPES=$'password or secret assigned inline\t(^|[\\s(;&|])[a-z0-9_]*(pass(word|wd)?|pwd|secret|token|api_?key|access_?key|private_?key|credentials?)[a-z0-9_]*=(?![$"\']?\\$)(?!(\\d+|true|false|yes|no|on|off)([\\s"\')]|$))[^\\s"\')]{4,}
+password passed as a flag\t(--password|--pass|--token|--api-key)(=|\\s+)(?![$"\']?\\$)[^\\s"\')-][^\\s"\')]*
+sshpass password\tsshpass\\s+-p\\s*(?![$"\']?\\$)\\S
+credentials in a URL\t[a-z][a-z0-9+.-]*://[^/\\s:@]+:(?![$"\']?\\$)[^@\\s/]+@
+authorisation header\t(authorization:\\s*(bearer|basic|token)|x-api-key:)\\s*(?![$"\']?\\$)[a-z0-9]
+API key shape\t(sk_live_|sk-(ant|proj|or-v1)-|AKIA[0-9A-Z]{16}|gh[pousr]_[A-Za-z0-9]{30,}|github_pat_|xox[baprs]-)
+JSON web token\teyJ[A-Za-z0-9_-]{10,}\\.[A-Za-z0-9_-]{10,}\\.
+private key\t-----BEGIN [A-Z ]*PRIVATE KEY'
 # Commands an allow rule must never pre-approve: the consent, deploy and secret-disclosure cases the
 # bash guard handles. An allow rule matching any of these means "Yes, and don't ask again" has
 # quietly turned a consent rule back into prose. Keep in step with scripts/claude-bash-guard.sh.
@@ -61,6 +76,8 @@ npm install left-pad
 pnpm add left-pad
 cat .env
 printenv
+curl https://example.com
+wget https://example.com/x
 sed -i s/exit 2/exit 0/ scripts/claude-bash-guard.sh'
 # Rules that .claude/settings.json must keep, in full. Ask rules are evaluated before allow rules, so
 # they hold even when an allowlist wildcard matches the same command; deny rules stop the Read tool
@@ -154,6 +171,13 @@ bad=$(git ls-files | grep -iE "$SECRET_FILE_PATTERNS" 2>/dev/null | grep -vE "$A
 rc=${bad##*__rc=}; bad=${bad%__rc=*}; bad=${bad%$'\n'}
 if [ "$rc" -ge 2 ]; then fail "could not apply SECRET_FILE_PATTERNS (failing closed)"
 elif [ -n "$bad" ]; then fail "confidential file(s) tracked:"; echo "$bad" | sed 's/^/      /'; else ok "none tracked"; fi
+agent_local=$(git ls-files | grep -E "$AGENT_LOCAL_FILES" || true)
+if [ -n "$agent_local" ]; then
+  fail "Claude Code's local settings are tracked; they hold saved approvals, passwords included. Rotate anything in them, then git rm --cached:"
+  echo "$agent_local" | sed 's/^/      /'
+else
+  ok "Claude Code's local settings are not tracked"
+fi
 
 if [ -n "$PUBLIC_VAR_PREFIX" ]; then
   echo "[2] Only allowlisted ${PUBLIC_VAR_PREFIX}* are public; no server secrets in $CLIENT_DIR"
@@ -247,7 +271,7 @@ else
   # mutation test in tests/guardrail-cases.sh.
   # SC2016: the single-quoted block is JavaScript; its $ characters are regex and template syntax.
   # shellcheck disable=SC2016
-  if report=$(SAMPLES="$CONSENT_SAMPLES" ASK="$REQUIRED_ASK_RULES" DENY="$REQUIRED_DENY_RULES" node -e '
+  if report=$(SAMPLES="$CONSENT_SAMPLES" ASK="$REQUIRED_ASK_RULES" DENY="$REQUIRED_DENY_RULES" SHAPES="$SAVED_SECRET_SHAPES" node -e '
     const fs = require("fs")
     const lines = (s) => s.split("\n").filter(Boolean)
     const samples = lines(process.env.SAMPLES), needAsk = lines(process.env.ASK), needDeny = lines(process.env.DENY)
@@ -298,6 +322,13 @@ else
       // connecting a server listed in .mcp.json; this setting approves every one of them unseen.
       if (j.enableAllProjectMcpServers === true) errs.push(`${file}: enableAllProjectMcpServers is true, which connects every MCP server in .mcp.json without asking`)
     }
+    // Sites for the web-fetch tool are a reviewed list in settings.json (bootstrap Q7). One saved
+    // through "Yes, and do not ask again" lands in the local file instead, unreviewed.
+    if (fs.existsSync(localFile)) {
+      const saved = ((read(localFile).permissions || {}).allow || []).filter((r) => typeof r === "string" && /^WebFetch(\(|$)/.test(r))
+      if (saved.length) errs.push(`${localFile}: saved web-fetch approval(s) outside the reviewed list (move a site you trust into settings.json, then delete these): ` + saved.join(", "))
+      else oks.push("no web-fetch approval saved outside the reviewed list")
+    }
 
     // Permission creep: an allow rule in either file that matches a consent sample means a saved
     // Yes-and-do-not-ask-again has quietly turned a consent rule back into prose.
@@ -310,6 +341,25 @@ else
       const esc = (x) => x.replace(/[.+?^${}()|[\]\\]/g, "\\$&").replace(/\*/g, ".*")
       return new RegExp("^(" + esc(g) + (bare === null ? "" : "|" + esc(bare)) + ")$")
     }
+    // Credentials saved inside a rule. "Yes, and do not ask again" stores the full command, so a
+    // command that carried a password leaves it in the settings file. The rule is identified by its
+    // position, never printed: this output reaches the transcript and the CI log.
+    const shapes = lines(process.env.SHAPES).map((l) => { const i = l.indexOf("\t"); return [l.slice(0, i), new RegExp(l.slice(i + 1), "i")] })
+    const secretIn = (rule) => (shapes.find(([, re]) => re.test(rule)) || [null])[0]
+    const leaked = []
+    for (const file of [settingsFile, localFile]) {
+      if (!fs.existsSync(file)) continue
+      const p = read(file).permissions || {}
+      for (const list of ["allow", "ask", "deny"]) {
+        (p[list] || []).forEach((rule, i) => {
+          const what = typeof rule === "string" && secretIn(rule)
+          if (what) leaked.push(`${file}: permissions.${list} rule #${i + 1} contains a credential (${what})`)
+        })
+      }
+    }
+    if (leaked.length) errs.push("credential saved in a permission rule (treat it as exposed: rotate it, then delete the rule; the rule is not shown here):\n" + leaked.map((c) => "      " + c).join("\n"))
+    else oks.push("no credential saved in a permission rule")
+
     const creep = []
     for (const file of [settingsFile, localFile]) {
       if (!fs.existsSync(file)) continue

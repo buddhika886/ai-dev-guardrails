@@ -95,6 +95,16 @@ guard block "echo of the configured secret still blocked"    'echo $SIGNING_KEY'
 guard allow "a prod-shaped command is NOT caught (no patterns configured)" 'psql postgres://u@db.prod.example/x'
 
 
+echo "── no sandbox chosen: nothing is added"
+if node -e 'const j=JSON.parse(require("fs").readFileSync(".claude/settings.json","utf8"));process.exit(!j.sandbox&&!j.permissions.ask.includes("Bash(dangerouslyDisableSandbox:true)")?0:1)'; then
+  t_pass "with no sandbox chosen, settings.json has no sandbox block and no retry rule"
+else t_fail "settings after a no-sandbox install" "$(cat .claude/settings.json)"; fi
+
+echo "── web pages: a reviewed list of sites (scenario B)"
+if node -e 'const j=JSON.parse(require("fs").readFileSync(".claude/settings.json","utf8"));process.exit((j.permissions.allow||[]).join(" ")==="WebFetch(domain:docs.github.com) WebFetch(domain:nodejs.org)"&&!j.permissions.ask.includes("WebFetch")?0:1)'; then
+  t_pass "the listed sites are allowed in settings.json, and nothing else"
+else t_fail "web-fetch list after install" "$(cat .claude/settings.json)"; fi
+
 echo "── nothing of the template survives bootstrap"
 # Asserted here as well as in install.sh, so the install cannot mark its own homework.
 for p in .template tests scripts/template-integrity.sh CONTRIBUTING.md CODE_OF_CONDUCT.md SECURITY.md \

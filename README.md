@@ -162,8 +162,29 @@ No safety system is complete. The gaps, plainly:
   final word: protect your `main` branch so they must pass.
 - A leaked secret cannot be un-leaked. If one reaches the chat history, change it.
 - Dependency rules are set up for npm. The client-name check scans files, not commit messages.
+- The guard reads file names, so a search across the whole project (`grep -r`) can still see a
+  secret file. Setup offers Claude Code's sandbox, which closes that gap; it is optional.
+- `curl` and `wget` ask before going online, but a script the AI writes and runs can still reach
+  the internet unless the sandbox is on.
 - MCP servers add tools that the guard cannot read. Every MCP tool call asks first, but a server
   you add for yourself, outside the project, is not reviewed by anyone else.
+
+---
+
+## Changing a rule
+
+Every rule can be changed, on purpose and in the open:
+
+- **Shell commands** (what is blocked, what asks, which addresses count as this machine): the
+  named lists in `scripts/claude-bash-guard.sh`.
+- **Claude Code's own permissions** (file reads, web pages, MCP tools, the sandbox):
+  `.claude/settings.json`.
+- **The checks**: `scripts/ci-guardrails.sh`.
+
+These files guard themselves. When the AI edits one, it asks you first. A pull request that
+changes one needs an owner's approval (`.github/CODEOWNERS`), and CI judges it with the version
+already on `main`, so a change cannot approve itself. [Changing the rules](docs/configuring-rules.md)
+shows each change with an example.
 
 ---
 

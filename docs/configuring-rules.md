@@ -87,6 +87,16 @@ These work without configuration. You can **add** to them; do not remove entries
 | `DEPENDENCY_PATTERNS` | Ask | Adding a package (`npm install <name>`, `pnpm add`, `yarn add`, `bun add`), `pnpm dlx`/`yarn dlx`/`bunx`, approving install scripts |
 | `DEP_WEAKEN` | Block | Overriding the `.npmrc` policy for one command: `--min-release-age`, `--before`, `--registry`, `--allow-git`, `--dangerously-allow-all-scripts`, `npm config set` on those keys, `npm_config_*` variables |
 | `SECRET_FILES`, `SECRET_READERS`, `SECRET_CLIS` | Block | Reading `.env` and key files, password-manager commands |
+| `NETWORK_FETCH` | Ask | `curl`, `wget` and HTTPie, except a plain request to this machine only |
+| `LOCAL_HOSTS` | Exempt | The addresses that count as this machine: `localhost`, `127.0.0.1`, `[::1]` |
+
+**Example: your local dev server answers on `app.localhost`.** Add it to `LOCAL_HOSTS`:
+
+```bash
+LOCAL_HOSTS='(localhost|127\.0\.0\.1|\[::1\]|app\.localhost)'
+```
+
+Add only names that can never mean another machine. A command that names any other host still asks.
 
 **Example: your team deploys with a tool called `shipit`.** Add a line to `DEPLOY_PATTERNS`:
 
@@ -130,6 +140,31 @@ Claude Code checks deny rules first, then ask, then allow. That is why an "alway
 
 **Do not** add allow rules for commits, pushes or deploys. Check 8 fails if you do, in either
 settings file.
+
+**Web pages.** Bootstrap asked how Claude's web-fetch tool behaves (question Q7). To let it read a
+site without asking, add a rule to `permissions.allow` in `.claude/settings.json` and remove
+`WebFetch` from `permissions.ask` if it is there (an ask rule beats every allow rule):
+
+```json
+"WebFetch(domain:docs.github.com)"
+```
+
+Keep the list in `settings.json`, where changes are reviewed. A site saved through "don't ask again"
+goes to `settings.local.json` instead, and check 8 fails until it is moved or deleted.
+
+**The sandbox.** Bootstrap asked whether shell commands run inside Claude Code's sandbox (question
+Q6). If you said yes, `.claude/settings.json` has a `sandbox` block. To let commands reach another
+address, add it to `sandbox.network.allowedDomains`:
+
+```json
+"sandbox": { "enabled": true, "network": { "allowedDomains": ["registry.npmjs.org", "github.com", "*.github.com", "api.stripe.com"] } }
+```
+
+To switch the sandbox on later, add that block and the ask rule
+`Bash(dangerouslyDisableSandbox:true)`, then restart Claude Code and run `/sandbox` to confirm it is
+running (Linux and WSL2 need `bubblewrap` and `socat`). No check enforces the sandbox, so removing it
+is a reviewed change to `settings.json`, not a failure. Without it, a command that reads files
+without naming them, such as `grep -r`, is not stopped by the guard or the `Read` deny rules.
 
 ---
 

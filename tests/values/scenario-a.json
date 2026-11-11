@@ -34,6 +34,10 @@
   "PROD_ENV_VAR_NAMES": "PROD_DATABASE_URL DEPLOY_TOKEN",
 
   "GOVERNANCE_ENABLED": "on",
+  "SANDBOX_MODE": "npm-github",
+  "SANDBOX_DOMAINS": "",
+  "WEBFETCH_MODE": "ask",
+  "WEBFETCH_SITES": "",
   "SIGNOFF_ENABLED": "on",
   "BOOTSTRAP_DATE": "2026-10-26",
   "CODEOWNERS": "@acme/platform-team",
