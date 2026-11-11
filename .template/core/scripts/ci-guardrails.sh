@@ -103,6 +103,7 @@ Edit(.gitleaks.toml)
 Edit(CLAUDE.md)
 Edit(.claude/settings.json)
 Edit(.mcp.json)
+Edit(.guardrails/guard.log)
 mcp__*'
 REQUIRED_DENY_RULES='Read(.env)
 Read(.env.*)

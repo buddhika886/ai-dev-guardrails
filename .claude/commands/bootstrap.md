@@ -334,10 +334,12 @@ Do these in order. Show the user what you are doing at each step.
      files; the template's was removed in step 0)
    - `.template/core/README.project.md` → hold for Step 5 (do not place yet).
    - Make sure `.gitignore` contains `.guardrails/*.local`, `.claude/settings.local.json`,
-     `.claude/profiles/*.settings.json` and `.claude/openrouter.settings.json` (append any that are
-     missing; create `.gitignore` if there is none). The first keeps the client denylist out of git;
-     the second keeps per-machine permission approvals out of the shared repo; the last two keep a
-     developer's model-provider keys out (the fourth is the OpenRouter profile's old location).
+     `.claude/profiles/*.settings.json`, `.claude/openrouter.settings.json` and
+     `.guardrails/guard.log*` (append any that are missing; create `.gitignore` if there is none).
+     The first keeps the client denylist out of git; the second keeps per-machine permission
+     approvals out of the shared repo; the third and fourth keep a developer's model-provider keys
+     out (the fourth is the OpenRouter profile's old location); the last keeps the command guard's
+     local decision log out.
    - **Sandbox (Q6).** Unless the answer was "no sandbox", add to `.claude/settings.json` a
      `sandbox` block with `"enabled": true` and `network.allowedDomains` set to
      `["registry.npmjs.org", "github.com", "*.github.com"]` (npm and GitHub), `[]` (no internet) or

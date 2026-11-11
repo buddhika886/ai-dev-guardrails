@@ -159,6 +159,8 @@ Say these plainly in any security write-up rather than describing the controls a
 - The bash guard matches command text. It cannot see through environment-variable indirection,
   scripts it is asked to run, or a program invoked in an unexpected form. Process is the control.
 - Agent hooks gate the agent only. A human's `!` commands and terminal are not inspected.
+- The guard's decision log (`.guardrails/guard.log`) lives on one machine and is a record, not
+  evidence that nothing else happened: a person can delete it, and a skipped hook writes nothing.
 - The guard and the `Read` deny rules match file names. A command that reads files without naming
   them, such as `grep -r`, is stopped only if the Claude Code sandbox is on (chosen at bootstrap;
   see `sandbox` in `.claude/settings.json`).

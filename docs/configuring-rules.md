@@ -111,6 +111,15 @@ allow rule for it would also be caught.
 block only for things that should never happen from this machine whoever approves (production from a
 laptop, printing secrets). A needless prompt costs a second; an unintended deploy costs much more.
 
+### The decision log
+
+Each time the guard blocks or asks, it adds a line to `.guardrails/guard.log`: when (UTC), what it
+decided and which list matched. It never records the command, because a command can hold a secret.
+To see what the AI tried this week, read it: `cat .guardrails/guard.log`. The file stays on your
+machine and is never committed. It moves to `guard.log.1` once it passes 1 MB
+(`GUARD_LOG_MAX_BYTES` in the guard). With the governance tier on, cite it in the evidence log when
+a block or an ask mattered to a decision.
+
 ### Known limit
 
 The guard reads command text. A command that reaches production indirectly, through a variable or a

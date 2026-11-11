@@ -117,7 +117,7 @@ LOCAL_HOSTS='(localhost|127\.0\.0\.1|\[::1\])'
 # cover the editing tools; this covers sed -i, redirects, tee, cp, mv, rm and the like on the same
 # files. Asked, not blocked: maintaining the guardrails is legitimate work, but it is never work the
 # agent does on its own say-so.
-ENFORCEMENT_FILES='(scripts/(claude-bash-guard|ci-guardrails|claude-stop-guardrails)\.sh|lefthook\.yml|\.github/workflows/ci\.yml|\.github/CODEOWNERS|\.gitleaks\.toml|\.claude/settings\.json|CLAUDE\.md|\.npmrc|\.mcp\.json)'
+ENFORCEMENT_FILES='(scripts/(claude-bash-guard|ci-guardrails|claude-stop-guardrails)\.sh|lefthook\.yml|\.github/workflows/ci\.yml|\.github/CODEOWNERS|\.gitleaks\.toml|\.claude/settings\.json|CLAUDE\.md|\.npmrc|\.mcp\.json|\.guardrails/guard\.log)'
 ENFORCEMENT_WRITE="${B}(sed[^|;&]*[[:space:]]-[a-zA-Z]*i|perl[^|;&]*[[:space:]]-[a-zA-Z]*i|tee|cp|mv|rm|truncate|chmod|install|ln)[[:space:]][^|;&]*${ENFORCEMENT_FILES}([[:space:]\"'|;&)]|$)"
 ENFORCEMENT_WRITE+="|>>?[[:space:]]*[\"']?${ENFORCEMENT_FILES}([[:space:]\"'|;&)]|$)"
 
@@ -156,6 +156,25 @@ SECRET_NAME_SHAPE='[A-Za-z0-9_]*(SECRET|TOKEN|PASSWORD|PASSWD|API_?KEY|PRIVATE_?
 SECRET_CLIS="${B}(op[[:space:]]+(read|inject|item[[:space:]]+get)|doppler[[:space:]]+secrets|vault[[:space:]]+(kv[[:space:]]+get|read)|gh[[:space:]]+auth[[:space:]]+token|heroku[[:space:]]+config([[:space:]]|$)|aws[[:space:]]+secretsmanager[[:space:]]+get-secret-value|gcloud[[:space:]]+secrets[[:space:]]+versions[[:space:]]+access|az[[:space:]]+keyvault[[:space:]]+secret[[:space:]]+show|kubectl[[:space:]]+get[[:space:]]+secrets?[^|;&]*-o)"
 # ------------------------------------------------------------------------------------------------
 
+# ---- Decision log ----
+# One line per block or ask: UTC time, decision, rule name. Never the command, which can hold a
+# secret. Kept on this machine in .guardrails/guard.log (gitignored), as a record of what the AI tried
+# and what was stopped. Best effort by design: a failure to write is ignored, so logging can never
+# change a decision. A symlinked folder or log is not written through. Past GUARD_LOG_MAX_BYTES the
+# log moves to guard.log.1 and a new one starts.
+GUARD_LOG_MAX_BYTES=1048576
+guard_log() {
+  (
+    root="${CLAUDE_PROJECT_DIR:-}"
+    if [ -z "$root" ]; then root=$(git rev-parse --show-toplevel 2>/dev/null) || exit 0; fi
+    d="$root/.guardrails"; f="$d/guard.log"
+    if [ -L "$d" ] || [ -L "$f" ] || [ -L "$f.1" ]; then exit 0; fi
+    mkdir -p "$d" || exit 0
+    if [ -f "$f" ] && [ "$(( $(wc -c < "$f") ))" -gt "$GUARD_LOG_MAX_BYTES" ]; then mv -f "$f" "$f.1"; fi
+    printf '%s %s %s\n' "$(date -u +%Y-%m-%dT%H:%M:%SZ)" "$1" "$2" >> "$f"
+  ) >/dev/null 2>&1 || true
+}
+
 payload=$(cat)
 
 # The filled values are matched with grep -E below. An invalid pattern makes grep exit 2, and in a
@@ -171,13 +190,13 @@ for v in PROD_GUARD_PATTERNS PROD_ENV_VAR_NAMES SECRET_VAR_NAMES; do
       # quote, a bracket or a shell metacharacter.
       if ! grep -qE '^[A-Za-z_][A-Za-z0-9_]*( +[A-Za-z_][A-Za-z0-9_]*)* *$' <<<"$val"; then
         echo "BLOCKED: the bash guard is misconfigured: $v must be space-separated variable names (got: $val). Fix scripts/claude-bash-guard.sh; every command is blocked until it is valid." >&2
-        exit 2
+        guard_log block MISCONFIGURED; exit 2
       fi ;;
     *)
       grep -qE "$val" <<<"" 2>/dev/null; rc=$?
       if [ "$rc" -ge 2 ]; then
         echo "BLOCKED: the bash guard is misconfigured: $v is not a valid extended regex. Fix scripts/claude-bash-guard.sh; every command is blocked until it is valid." >&2
-        exit 2
+        guard_log block MISCONFIGURED; exit 2
       fi ;;
   esac
 done
@@ -186,7 +205,7 @@ done
 # asked to approve. Block: a loud, obvious failure beats a silent hole.
 if [ -z "$payload" ]; then
   echo "BLOCKED: the bash guard received no hook payload, so it cannot inspect this command. Failing closed. Check the PreToolUse hook wiring in .claude/settings.json." >&2
-  exit 2
+  guard_log block NO_PAYLOAD; exit 2
 fi
 
 # Extract tool_input.command with whichever JSON parser is available. Both parsers exit non-zero on
@@ -211,7 +230,9 @@ if [ "$extracted" -eq 0 ]; then
   SUFFIX=' (the guard could not parse the hook payload and matched the raw payload instead)'
 fi
 
-block() { echo "BLOCKED: $1${SUFFIX}" >&2; exit 2; }
+# block <reason> <rule>, and ask below: the rule name goes to the decision log. "(raw)" marks a
+# decision made on the raw payload because it could not be parsed.
+block() { guard_log "block${SUFFIX:+(raw)}" "${2:-UNNAMED}"; echo "BLOCKED: $1${SUFFIX}" >&2; exit 2; }
 
 # Every match below feeds grep from a here-string, never `printf ... | grep -q`. grep -q exits at
 # the first match; under pipefail a writer still holding more than a pipe buffer (64 KiB) then dies
@@ -222,26 +243,26 @@ block() { echo "BLOCKED: $1${SUFFIX}" >&2; exit 2; }
 
 # 1) Production from local: by host/verb pattern.
 if [ -n "$PROD_GUARD_PATTERNS" ] && grep -qiE "$PROD_GUARD_PATTERNS" <<<"$cmd"; then
-  block "this targets PRODUCTION from local. Prod is off-limits from local (CLAUDE.md); prepare the steps for a human to run instead."
+  block "this targets PRODUCTION from local. Prod is off-limits from local (CLAUDE.md); prepare the steps for a human to run instead." PROD_GUARD_PATTERNS
 fi
 
 # 1b) Production from local: by prod-bearing env-var name.
 if [ -n "$PROD_ENV_VAR_NAMES" ]; then
   names=$(printf '%s' "$PROD_ENV_VAR_NAMES" | tr ' ' '|')
   if grep -qE "$names" <<<"$cmd"; then
-    block "command references a production credential/target env var. Prepare the steps for a human to run against prod; do not execute from local (CLAUDE.md)."
+    block "command references a production credential/target env var. Prepare the steps for a human to run against prod; do not execute from local (CLAUDE.md)." PROD_ENV_VAR_NAMES
   fi
 fi
 
 # 2a) Force-push.
 # `+ref` is a force-push by refspec, `--mirror` overwrites every ref, `--delete`/`-d` removes one.
 if grep -qiE 'git[[:space:]]+push|alias\.[^=[:space:]]*=push' <<<"$cmd" && grep -qiE "(--force|--force-with-lease|--mirror|--delete|[[:space:]]-[fd]([[:space:]]|$)|[[:space:]][\"']?\+[A-Za-z0-9_./-]+)" <<<"$cmd"; then
-  block "force-push, mirror or remote branch delete is not allowed on the shared repo (never rewrite others' history)."
+  block "force-push, mirror or remote branch delete is not allowed on the shared repo (never rewrite others' history)." FORCE_PUSH
 fi
 
 # 2b) Other destructive git.
 if grep -qiE 'git[[:space:]]+reset[[:space:]].*--hard|git[[:space:]]+clean[[:space:]]+(-[A-Za-z]*f|--force)' <<<"$cmd"; then
-  block "destructive git (reset --hard / clean -f). Confirm with the user and run it yourself if truly intended."
+  block "destructive git (reset --hard / clean -f). Confirm with the user and run it yourself if truly intended." DESTRUCTIVE_GIT
 fi
 
 # 3) Secret disclosure into the transcript.
@@ -249,31 +270,31 @@ DISCLOSE="this would print a secret into the session transcript, which is stored
 # Committed example files are safe to read; scrub them out before matching so `cat .env.example`
 # is not caught by the `.env*` shape.
 scrubbed=$(printf '%s' "$cmd" | sed -E 's/\.(env|dev\.vars)\.(example|sample|template|dist)([^A-Za-z0-9_-]|$)/\3/g')
-if grep -qiE "$SECRET_FILE_READ" <<<"$scrubbed"; then block "$DISCLOSE"; fi
-if grep -qiE "$GLOB_READ" <<<"$scrubbed"; then block "$DISCLOSE"; fi
-if grep -qE "$ENV_DUMP" <<<"$cmd"; then block "$DISCLOSE"; fi
-if grep -qiE "$SECRET_CLIS" <<<"$cmd"; then block "$DISCLOSE"; fi
+if grep -qiE "$SECRET_FILE_READ" <<<"$scrubbed"; then block "$DISCLOSE" SECRET_FILE_READ; fi
+if grep -qiE "$GLOB_READ" <<<"$scrubbed"; then block "$DISCLOSE" GLOB_READ; fi
+if grep -qE "$ENV_DUMP" <<<"$cmd"; then block "$DISCLOSE" ENV_DUMP; fi
+if grep -qiE "$SECRET_CLIS" <<<"$cmd"; then block "$DISCLOSE" SECRET_CLIS; fi
 secret_names="$SECRET_NAME_SHAPE"
 if [ -n "$SECRET_VAR_NAMES" ]; then
   secret_names="${secret_names}|$(printf '%s' "$SECRET_VAR_NAMES" | tr ' ' '|')"
 fi
 if grep -qE "${B}(echo|printf|print)[^|;&]*\\\$\\{?(${secret_names})([^A-Za-z0-9_]|$)" <<<"$cmd"; then
-  block "$DISCLOSE"
+  block "$DISCLOSE" SECRET_NAME_SHAPE
 fi
 if grep -qE "${B}printenv[[:space:]]+([^|;&]*[[:space:]])?(${secret_names})([^A-Za-z0-9_]|$)" <<<"$cmd"; then
-  block "$DISCLOSE"
+  block "$DISCLOSE" SECRET_NAME_SHAPE
 fi
 # The same secrets reached through code or a here-string rather than echo: node -e
 # 'console.log(process.env.NAME)', python's os.environ["NAME"], awk's ENVIRON["NAME"], and
 # `cat <<< "$NAME"` / `tee x <<< "$NAME"`.
 SECRET_VIA_CODE="process\\.env\\.(${secret_names})([^A-Za-z0-9_]|$)|(os\\.environ|ENVIRON)(\\.get)?[[(][[:space:]]*[\"'](${secret_names})[\"']|<<<[[:space:]]*[\"']?\\$\\{?(${secret_names})([^A-Za-z0-9_]|$)"
 if grep -qE "$SECRET_VIA_CODE" <<<"$cmd"; then
-  block "$DISCLOSE"
+  block "$DISCLOSE" SECRET_VIA_CODE
 fi
 
 # 4) Switching off the dependency policy.
 if grep -qiE "$DEP_WEAKEN" <<<"$cmd"; then
-  block "this overrides the dependency policy in .npmrc (release cooldown, install-script approval, git/URL dependencies or the registry). Change .npmrc in a reviewed pull request instead; never bypass it for one command."
+  block "this overrides the dependency policy in .npmrc (release cooldown, install-script approval, git/URL dependencies or the registry). Change .npmrc in a reviewed pull request instead; never bypass it for one command." DEP_WEAKEN
 fi
 
 # ======== ASK: fresh consent every time ========
@@ -300,30 +321,31 @@ local_fetch() {
 # Emits a PreToolUse "ask" decision. The reason is built from fixed strings with no quotes or
 # backslashes, so it is valid JSON by construction and needs no encoder on PATH.
 ask() {
+  guard_log "ask${SUFFIX:+(raw)}" "${2:-UNNAMED}"
   printf '{"hookSpecificOutput":{"hookEventName":"PreToolUse","permissionDecision":"ask","permissionDecisionReason":"%s"}}\n' "$1${SUFFIX}"
   exit 0
 }
 
 if grep -qiE "$CONSENT_PATTERNS" <<<"$cmd"; then
-  ask "Consent required: this commits, pushes, publishes or changes something outside this machine. CLAUDE.md requires your explicit go-ahead each time."
+  ask "Consent required: this commits, pushes, publishes or changes something outside this machine. CLAUDE.md requires your explicit go-ahead each time." CONSENT_PATTERNS
 fi
 if grep -qiE "$GIT_ALIAS" <<<"$cmd"; then
-  ask "Consent required: this defines a git alias on the command line, which can stand for commit, push or anything else. Run the real command instead so the guard can see it."
+  ask "Consent required: this defines a git alias on the command line, which can stand for commit, push or anything else. Run the real command instead so the guard can see it." GIT_ALIAS
 fi
 if grep -qiE "$DEPLOY_PATTERNS" <<<"$cmd"; then
-  ask "Consent required: this deploys or changes a remote database. Confirm the target is not production, or that you intend it."
+  ask "Consent required: this deploys or changes a remote database. Confirm the target is not production, or that you intend it." DEPLOY_PATTERNS
 fi
 if grep -qiE "$REMOTE_CONFIG_PATTERNS" <<<"$cmd"; then
-  ask "Consent required: this changes remote secrets or config, which the repo cannot see. Record it so it is not later found as unexplained drift."
+  ask "Consent required: this changes remote secrets or config, which the repo cannot see. Record it so it is not later found as unexplained drift." REMOTE_CONFIG_PATTERNS
 fi
 if grep -qiE "$DEPENDENCY_PATTERNS" <<<"$cmd"; then
-  ask "Consent required: this adds a dependency or approves install scripts. Check the package name is the one you meant (assistants invent plausible names), that it is maintained, and that the project needs it."
+  ask "Consent required: this adds a dependency or approves install scripts. Check the package name is the one you meant (assistants invent plausible names), that it is maintained, and that the project needs it." DEPENDENCY_PATTERNS
 fi
 if grep -qiE "$NETWORK_FETCH" <<<"$cmd" && ! local_fetch "$cmd"; then
-  ask "Consent required: this fetches from the network from the shell (curl, wget or HTTPie). Check the address: a fetch can bring in instructions or code, and can carry data out. Requests to this machine only (localhost) do not ask."
+  ask "Consent required: this fetches from the network from the shell (curl, wget or HTTPie). Check the address: a fetch can bring in instructions or code, and can carry data out. Requests to this machine only (localhost) do not ask." NETWORK_FETCH
 fi
 if grep -qE "$ENFORCEMENT_WRITE" <<<"$cmd"; then
-  ask "Consent required: this rewrites a guardrail file (the command guard, the checks, the hooks, CI, CODEOWNERS, the secret-scanner config, CLAUDE.md or .npmrc). Changing the rules is a reviewed decision, never a side effect of a task; never weaken a check to make it pass."
+  ask "Consent required: this rewrites a guardrail file (the command guard, the checks, the hooks, CI, CODEOWNERS, the secret-scanner config, CLAUDE.md or .npmrc). Changing the rules is a reviewed decision, never a side effect of a task; never weaken a check to make it pass." ENFORCEMENT_WRITE
 fi
 
 exit 0

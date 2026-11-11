@@ -82,6 +82,7 @@ ensure_ignored '.guardrails/*.local'
 ensure_ignored '.claude/settings.local.json'
 ensure_ignored '.claude/profiles/*.settings.json'
 ensure_ignored '.claude/openrouter.settings.json'
+ensure_ignored '.guardrails/guard.log*'
 # Step 4.1, sandbox (Q6): merged into the parsed settings, never edited as text.
 node -e '
 const fs = require("fs"), [mode, domains] = process.argv.slice(1), f = ".claude/settings.json"

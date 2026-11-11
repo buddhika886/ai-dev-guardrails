@@ -23,6 +23,7 @@
       "Edit(CLAUDE.md)",
       "Edit(.claude/settings.json)",
       "Edit(.mcp.json)",
+      "Edit(.guardrails/guard.log)",
       "mcp__*"
     ],
     "deny": [
