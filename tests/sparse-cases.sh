@@ -26,7 +26,8 @@ for want in \
   "[6] Built-bundle secret scan: SKIPPED" \
   "[7] Schema-truth check: SKIPPED" \
   "[9] Client denylist: SKIPPED" \
-  "[11] Governance records: SKIPPED"
+  "[11] Governance records: SKIPPED" \
+  "[14] MCP servers pinned: SKIPPED"
 do
   if grep -qF "$want" <<<"$out"; then
     t_pass "reported: $want"
@@ -42,12 +43,12 @@ if grep -i 'skipped' <<<"$out" | grep -qF '✓'; then
 else
   t_pass "no SKIPPED line is marked as verified"
 fi
-# All twelve checks accounted for, so a reader of the log can audit coverage.
-seen=$(grep -cE '^\[([1-9]|1[012])\]' <<<"$out")
-if [ "$seen" -eq 12 ]; then
-  t_pass "all twelve checks appear in the output"
+# All fourteen checks accounted for, so a reader of the log can audit coverage.
+seen=$(grep -cE '^\[([1-9]|1[0-4])\]' <<<"$out")
+if [ "$seen" -eq 14 ]; then
+  t_pass "all fourteen checks appear in the output"
 else
-  t_fail "only $seen of 12 checks reported themselves" "$out"
+  t_fail "only $seen of 14 checks reported themselves" "$out"
 fi
 # Governance off: none of its files or pointers may appear.
 if [ ! -e docs/governance ] && [ ! -e .github/pull_request_template.md ] && ! grep -q 'docs/governance' CLAUDE.md; then
@@ -94,6 +95,16 @@ guard block "echo of the configured secret still blocked"    'echo $SIGNING_KEY'
 # visible rather than being discovered later.
 guard allow "a prod-shaped command is NOT caught (no patterns configured)" 'psql postgres://u@db.prod.example/x'
 
+
+echo "── no sandbox chosen: nothing is added"
+if node -e 'const j=JSON.parse(require("fs").readFileSync(".claude/settings.json","utf8"));process.exit(!j.sandbox&&!j.permissions.ask.includes("Bash(dangerouslyDisableSandbox:true)")?0:1)'; then
+  t_pass "with no sandbox chosen, settings.json has no sandbox block and no retry rule"
+else t_fail "settings after a no-sandbox install" "$(cat .claude/settings.json)"; fi
+
+echo "── web pages: a reviewed list of sites (scenario B)"
+if node -e 'const j=JSON.parse(require("fs").readFileSync(".claude/settings.json","utf8"));process.exit((j.permissions.allow||[]).join(" ")==="WebFetch(domain:docs.github.com) WebFetch(domain:nodejs.org)"&&!j.permissions.ask.includes("WebFetch")?0:1)'; then
+  t_pass "the listed sites are allowed in settings.json, and nothing else"
+else t_fail "web-fetch list after install" "$(cat .claude/settings.json)"; fi
 
 echo "── nothing of the template survives bootstrap"
 # Asserted here as well as in install.sh, so the install cannot mark its own homework.

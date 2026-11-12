@@ -40,6 +40,24 @@ GOVERNANCE_ENABLED='{{GOVERNANCE_ENABLED}}' # 'on' or 'off': whether the governa
 # naming the client would itself leak the name. CI reads the same list from the GUARDRAILS_DENYLIST
 # environment variable (a repository secret) instead.
 DENYLIST_FILE='.guardrails/denylist.local'
+# Claude Code's per-machine settings. "Yes, and don't ask again" saves the whole approved command
+# here, password included, so the file must never be committed (public repositories have leaked
+# thousands of credentials this way). Checked by [1] whatever SECRET_FILE_PATTERNS says.
+AGENT_LOCAL_FILES='(^|/)\.claude/settings\.local\.json$'
+# Files the AI reads as instructions, or that add tools it can call (JavaScript regex on the path).
+# Check [13] scans them for hidden characters; the ask rules and CODEOWNERS protect them from edits.
+AI_INSTRUCTION_FILES='(^|/)(CLAUDE|AGENTS|GEMINI)(\.local)?\.md$|^\.claude/|^\.agents/|^\.mcp\.json$|^\.cursor/|\.mdc$|^\.github/copilot-instructions\.md$'
+# Credential shapes that must not sit inside a saved permission rule, one "label<TAB>regex" per line
+# (JavaScript regex, case-insensitive). A value that is a variable reference ($NAME) is not a
+# credential and is not matched. Checked by [8]; the rule itself is never printed.
+SAVED_SECRET_SHAPES=$'password or secret assigned inline\t(^|[\\s(;&|])[a-z0-9_]*(pass(word|wd)?|pwd|secret|token|api_?key|access_?key|private_?key|credentials?)[a-z0-9_]*=(?![$"\']?\\$)(?!(\\d+|true|false|yes|no|on|off)([\\s"\')]|$))[^\\s"\')]{4,}
+password passed as a flag\t(--password|--pass|--token|--api-key)(=|\\s+)(?![$"\']?\\$)[^\\s"\')-][^\\s"\')]*
+sshpass password\tsshpass\\s+-p\\s*(?![$"\']?\\$)\\S
+credentials in a URL\t[a-z][a-z0-9+.-]*://[^/\\s:@]+:(?![$"\']?\\$)[^@\\s/]+@
+authorisation header\t(authorization:\\s*(bearer|basic|token)|x-api-key:)\\s*(?![$"\']?\\$)[a-z0-9]
+API key shape\t(sk_live_|sk-(ant|proj|or-v1)-|AKIA[0-9A-Z]{16}|gh[pousr]_[A-Za-z0-9]{30,}|github_pat_|xox[baprs]-)
+JSON web token\teyJ[A-Za-z0-9_-]{10,}\\.[A-Za-z0-9_-]{10,}\\.
+private key\t-----BEGIN [A-Z ]*PRIVATE KEY'
 # Commands an allow rule must never pre-approve: the consent, deploy and secret-disclosure cases the
 # bash guard handles. An allow rule matching any of these means "Yes, and don't ask again" has
 # quietly turned a consent rule back into prose. Keep in step with scripts/claude-bash-guard.sh.
@@ -61,6 +79,8 @@ npm install left-pad
 pnpm add left-pad
 cat .env
 printenv
+curl https://example.com
+wget https://example.com/x
 sed -i s/exit 2/exit 0/ scripts/claude-bash-guard.sh'
 # Rules that .claude/settings.json must keep, in full. Ask rules are evaluated before allow rules, so
 # they hold even when an allowlist wildcard matches the same command; deny rules stop the Read tool
@@ -84,7 +104,16 @@ Edit(.github/workflows/ci.yml)
 Edit(.github/CODEOWNERS)
 Edit(.gitleaks.toml)
 Edit(CLAUDE.md)
-Edit(.claude/settings.json)'
+Edit(.claude/settings.json)
+Edit(.mcp.json)
+Edit(.guardrails/guard.log)
+Edit(CLAUDE.local.md)
+Edit(AGENTS.md)
+Edit(.claude/agents/**)
+Edit(.claude/skills/**)
+Edit(.claude/commands/**)
+Edit(.agents/**)
+mcp__*'
 REQUIRED_DENY_RULES='Read(.env)
 Read(.env.*)
 Read(.dev.vars)
@@ -152,6 +181,13 @@ bad=$(git ls-files | grep -iE "$SECRET_FILE_PATTERNS" 2>/dev/null | grep -vE "$A
 rc=${bad##*__rc=}; bad=${bad%__rc=*}; bad=${bad%$'\n'}
 if [ "$rc" -ge 2 ]; then fail "could not apply SECRET_FILE_PATTERNS (failing closed)"
 elif [ -n "$bad" ]; then fail "confidential file(s) tracked:"; echo "$bad" | sed 's/^/      /'; else ok "none tracked"; fi
+agent_local=$(git ls-files | grep -E "$AGENT_LOCAL_FILES" || true)
+if [ -n "$agent_local" ]; then
+  fail "Claude Code's local settings are tracked; they hold saved approvals, passwords included. Rotate anything in them, then git rm --cached:"
+  echo "$agent_local" | sed 's/^/      /'
+else
+  ok "Claude Code's local settings are not tracked"
+fi
 
 if [ -n "$PUBLIC_VAR_PREFIX" ]; then
   echo "[2] Only allowlisted ${PUBLIC_VAR_PREFIX}* are public; no server secrets in $CLIENT_DIR"
@@ -245,7 +281,7 @@ else
   # mutation test in tests/guardrail-cases.sh.
   # SC2016: the single-quoted block is JavaScript; its $ characters are regex and template syntax.
   # shellcheck disable=SC2016
-  if report=$(SAMPLES="$CONSENT_SAMPLES" ASK="$REQUIRED_ASK_RULES" DENY="$REQUIRED_DENY_RULES" node -e '
+  if report=$(SAMPLES="$CONSENT_SAMPLES" ASK="$REQUIRED_ASK_RULES" DENY="$REQUIRED_DENY_RULES" SHAPES="$SAVED_SECRET_SHAPES" node -e '
     const fs = require("fs")
     const lines = (s) => s.split("\n").filter(Boolean)
     const samples = lines(process.env.SAMPLES), needAsk = lines(process.env.ASK), needDeny = lines(process.env.DENY)
@@ -292,6 +328,16 @@ else
       const j = read(file), p = j.permissions || {}
       if (j.disableAllHooks === true) errs.push(`${file}: disableAllHooks is true, which switches off the bash guard`)
       if (p.defaultMode === "bypassPermissions") errs.push(`${file}: permissions.defaultMode is bypassPermissions, which skips every consent prompt`)
+      // MCP servers add tools the agent can call, outside the bash guard. Claude Code asks before
+      // connecting a server listed in .mcp.json; this setting approves every one of them unseen.
+      if (j.enableAllProjectMcpServers === true) errs.push(`${file}: enableAllProjectMcpServers is true, which connects every MCP server in .mcp.json without asking`)
+    }
+    // Sites for the web-fetch tool are a reviewed list in settings.json (bootstrap Q7). One saved
+    // through "Yes, and do not ask again" lands in the local file instead, unreviewed.
+    if (fs.existsSync(localFile)) {
+      const saved = ((read(localFile).permissions || {}).allow || []).filter((r) => typeof r === "string" && /^WebFetch(\(|$)/.test(r))
+      if (saved.length) errs.push(`${localFile}: saved web-fetch approval(s) outside the reviewed list (move a site you trust into settings.json, then delete these): ` + saved.join(", "))
+      else oks.push("no web-fetch approval saved outside the reviewed list")
     }
 
     // Permission creep: an allow rule in either file that matches a consent sample means a saved
@@ -305,6 +351,25 @@ else
       const esc = (x) => x.replace(/[.+?^${}()|[\]\\]/g, "\\$&").replace(/\*/g, ".*")
       return new RegExp("^(" + esc(g) + (bare === null ? "" : "|" + esc(bare)) + ")$")
     }
+    // Credentials saved inside a rule. "Yes, and do not ask again" stores the full command, so a
+    // command that carried a password leaves it in the settings file. The rule is identified by its
+    // position, never printed: this output reaches the transcript and the CI log.
+    const shapes = lines(process.env.SHAPES).map((l) => { const i = l.indexOf("\t"); return [l.slice(0, i), new RegExp(l.slice(i + 1), "i")] })
+    const secretIn = (rule) => (shapes.find(([, re]) => re.test(rule)) || [null])[0]
+    const leaked = []
+    for (const file of [settingsFile, localFile]) {
+      if (!fs.existsSync(file)) continue
+      const p = read(file).permissions || {}
+      for (const list of ["allow", "ask", "deny"]) {
+        (p[list] || []).forEach((rule, i) => {
+          const what = typeof rule === "string" && secretIn(rule)
+          if (what) leaked.push(`${file}: permissions.${list} rule #${i + 1} contains a credential (${what})`)
+        })
+      }
+    }
+    if (leaked.length) errs.push("credential saved in a permission rule (treat it as exposed: rotate it, then delete the rule; the rule is not shown here):\n" + leaked.map((c) => "      " + c).join("\n"))
+    else oks.push("no credential saved in a permission rule")
+
     const creep = []
     for (const file of [settingsFile, localFile]) {
       if (!fs.existsSync(file)) continue
@@ -573,6 +638,113 @@ else
     else
       fail "npm $npm_v ignores min-release-age, so the cooldown is not enforced: upgrade to npm $NPM_MIN_VERSION or later (Node 24 ships it)"
     fi
+  fi
+fi
+
+# [13] Hidden characters in the files the AI reads as instructions. Invisible Unicode can carry an
+# instruction a reviewer never sees (OWASP GenAI LLM Top 10 2026, LLM01). Reported by file, line
+# and code point only, never the text around it. Emoji keep working: a single variation selector
+# after a symbol, and a zero-width joiner between two symbols, are how emoji are spelled.
+echo "[13] No hidden characters in AI instruction files"
+if ! command -v node >/dev/null 2>&1; then
+  fail "node is not on PATH, so the instruction files cannot be checked (failing closed)"
+else
+  # SC2016: the single-quoted block is JavaScript; its $ characters are regex and template syntax.
+  # shellcheck disable=SC2016
+  if hidden=$({ git ls-files --cached --others --exclude-standard; if [ -f CLAUDE.local.md ]; then echo CLAUDE.local.md; fi; } | FILES_RE="$AI_INSTRUCTION_FILES" node -e '
+    const fs = require("fs")
+    const re = new RegExp(process.env.FILES_RE)
+    const paths = [...new Set(require("fs").readFileSync(0, "utf8").split("\n").filter((p) => p && re.test(p)))]
+    const isVS = (c) => (c >= 0xfe00 && c <= 0xfe0f)
+    const ascii = (c) => c !== undefined && c < 0x80
+    const kind = (c, prev, next) => {
+      if (c >= 0xe0000 && c <= 0xe007f) return "tag character"
+      if (c >= 0xe0100 && c <= 0xe01ef) return "variation selector (supplementary)"
+      if (c === 0x200b || c === 0x200c || (c >= 0x2060 && c <= 0x2064) || c === 0x00ad) return "zero-width or invisible character"
+      if ((c >= 0x202a && c <= 0x202e) || (c >= 0x2066 && c <= 0x2069)) return "bidirectional control"
+      if (c === 0x200d && (prev === undefined || next === undefined || ascii(prev) || ascii(next))) return "zero-width joiner outside an emoji"
+      if (isVS(c) && (prev === undefined || ascii(prev) || isVS(prev))) return "variation selector outside an emoji"
+      return null
+    }
+    const hits = []
+    let scanned = 0
+    for (const p of paths) {
+      if (!fs.existsSync(p) || !fs.statSync(p).isFile()) continue
+      scanned++
+      const lines = fs.readFileSync(p, "utf8").split("\n")
+      lines.forEach((line, i) => {
+        const cps = Array.from(line, (ch) => ch.codePointAt(0))
+        cps.forEach((c, j) => {
+          if (c === 0xfeff && i === 0 && j === 0) return
+          const k = c === 0xfeff ? "byte-order mark mid-file" : kind(c, cps[j - 1], cps[j + 1])
+          if (k) hits.push(`${p}:${i + 1} U+${c.toString(16).toUpperCase().padStart(4, "0")} (${k})`)
+        })
+      })
+    }
+    process.stdout.write(hits.length ? hits.map((h) => "ERR " + h).join("\n") : "OK " + scanned)
+  ' 2>&1); then
+    case "$hidden" in
+      "OK "*) ok "${hidden#OK } instruction file(s) scanned, none hidden" ;;
+      *) fail "hidden character(s) in AI instruction files (remove them; the text is not printed here):"
+         sed -n 's/^ERR /      /p' <<< "$hidden" ;;
+    esac
+  else
+    fail "could not scan the instruction files (failing closed):"; echo "$hidden" | sed 's/^/      /'
+  fi
+fi
+
+# [14] MCP servers in .mcp.json are pinned. A server launched as `npx -y some-server` runs whatever
+# version is newest at that moment, so a hijacked release reaches the AI's tools the same day
+# (OWASP GenAI LLM Top 10 2026, LLM01 and LLM04). Package runners need an exact version, Docker
+# images a digest, and remote servers https. A server run from code in this repository is reviewed
+# like any other code and passes.
+if [ ! -f .mcp.json ]; then
+  skipped "[14] MCP servers pinned" "no .mcp.json"
+else
+  echo "[14] MCP servers pinned (.mcp.json)"
+  if ! command -v node >/dev/null 2>&1; then
+    fail "node is not on PATH, so .mcp.json cannot be checked (failing closed)"
+  else
+  # SC2016: the single-quoted block is JavaScript; its $ characters are regex and template syntax.
+  # shellcheck disable=SC2016
+  if mcp=$(node -e '
+    const j = JSON.parse(require("fs").readFileSync(".mcp.json", "utf8"))
+    const servers = j.mcpServers || {}
+    const exactNpm = /^(@[a-z0-9._~-]+\/)?[a-z0-9._~-]+@\d+\.\d+\.\d+([-+][0-9A-Za-z.-]+)?$/i
+    const exactPy = /^[A-Za-z0-9._-]+(\[[A-Za-z0-9,._-]+\])?==\d+(\.\d+)*([a-z0-9.+-]*)?$/i
+    const local = /^(https?:\/\/)?(localhost|127\.0\.0\.1|\[::1\])([:/]|$)/i
+    const oks = [], errs = []
+    const firstPositional = (args) => args.find((a) => typeof a === "string" && !a.startsWith("-"))
+    for (const [name, s] of Object.entries(servers)) {
+      const args = Array.isArray(s.args) ? s.args : []
+      const cmd = String(s.command || "").split("/").pop()
+      if (s.url) {
+        if (/^https:\/\//i.test(s.url) || local.test(s.url)) oks.push(`${name}: remote server over https`)
+        else errs.push(`${name}: remote server must use https`)
+        continue
+      }
+      let pkg = null, py = false
+      if (cmd === "npx" || cmd === "bunx") pkg = firstPositional(args)
+      else if ((cmd === "pnpm" || cmd === "yarn") && args.includes("dlx")) pkg = firstPositional(args.slice(args.indexOf("dlx") + 1))
+      else if (cmd === "uvx") { pkg = firstPositional(args); py = true }
+      else if (cmd === "pipx" && args.includes("run")) { pkg = firstPositional(args.slice(args.indexOf("run") + 1)); py = true }
+      else if (cmd === "docker" || cmd === "podman") {
+        if (args.some((a) => typeof a === "string" && /@sha256:[0-9a-f]{64}$/.test(a))) oks.push(`${name}: image pinned by digest`)
+        else errs.push(`${name}: container image must be pinned by digest (image@sha256:...)`)
+        continue
+      } else { oks.push(`${name}: runs a local command, reviewed with the repository`); continue }
+      if (pkg && (py ? exactPy : exactNpm).test(pkg)) oks.push(`${name}: pinned to an exact version`)
+      else errs.push(`${name}: package must be pinned to an exact version (${py ? "name==1.2.3" : "name@1.2.3"}), not latest or a range`)
+    }
+    if (!Object.keys(servers).length) oks.push("no servers listed")
+    process.stdout.write([...oks.map((l) => "OK " + l), ...errs.map((l) => "ERR " + l)].join("\n"))
+  ' 2>&1); then
+    while IFS= read -r line; do
+      case "$line" in "OK "*) ok "${line#OK }" ;; "ERR "*) fail "${line#ERR }" ;; esac
+    done <<< "$mcp"
+  else
+    fail "could not parse .mcp.json (failing closed):"; echo "$mcp" | sed 's/^/      /'
+  fi
   fi
 fi
 

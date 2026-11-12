@@ -87,6 +87,16 @@ These work without configuration. You can **add** to them; do not remove entries
 | `DEPENDENCY_PATTERNS` | Ask | Adding a package (`npm install <name>`, `pnpm add`, `yarn add`, `bun add`), `pnpm dlx`/`yarn dlx`/`bunx`, approving install scripts |
 | `DEP_WEAKEN` | Block | Overriding the `.npmrc` policy for one command: `--min-release-age`, `--before`, `--registry`, `--allow-git`, `--dangerously-allow-all-scripts`, `npm config set` on those keys, `npm_config_*` variables |
 | `SECRET_FILES`, `SECRET_READERS`, `SECRET_CLIS` | Block | Reading `.env` and key files, password-manager commands |
+| `NETWORK_FETCH` | Ask | `curl`, `wget` and HTTPie, except a plain request to this machine only |
+| `LOCAL_HOSTS` | Exempt | The addresses that count as this machine: `localhost`, `127.0.0.1`, `[::1]` |
+
+**Example: your local dev server answers on `app.localhost`.** Add it to `LOCAL_HOSTS`:
+
+```bash
+LOCAL_HOSTS='(localhost|127\.0\.0\.1|\[::1\]|app\.localhost)'
+```
+
+Add only names that can never mean another machine. A command that names any other host still asks.
 
 **Example: your team deploys with a tool called `shipit`.** Add a line to `DEPLOY_PATTERNS`:
 
@@ -100,6 +110,15 @@ allow rule for it would also be caught.
 **Ask or block?** Use ask for anything a person might reasonably want to do (deploy, publish). Use
 block only for things that should never happen from this machine whoever approves (production from a
 laptop, printing secrets). A needless prompt costs a second; an unintended deploy costs much more.
+
+### The decision log
+
+Each time the guard blocks or asks, it adds a line to `.guardrails/guard.log`: when (UTC), what it
+decided and which list matched. It never records the command, because a command can hold a secret.
+To see what the AI tried this week, read it: `cat .guardrails/guard.log`. The file stays on your
+machine and is never committed. It moves to `guard.log.1` once it passes 1 MB
+(`GUARD_LOG_MAX_BYTES` in the guard). With the governance tier on, cite it in the evidence log when
+a block or an ask mattered to a decision.
 
 ### Known limit
 
@@ -130,6 +149,31 @@ Claude Code checks deny rules first, then ask, then allow. That is why an "alway
 
 **Do not** add allow rules for commits, pushes or deploys. Check 8 fails if you do, in either
 settings file.
+
+**Web pages.** Bootstrap asked how Claude's web-fetch tool behaves (question Q7). To let it read a
+site without asking, add a rule to `permissions.allow` in `.claude/settings.json` and remove
+`WebFetch` from `permissions.ask` if it is there (an ask rule beats every allow rule):
+
+```json
+"WebFetch(domain:docs.github.com)"
+```
+
+Keep the list in `settings.json`, where changes are reviewed. A site saved through "don't ask again"
+goes to `settings.local.json` instead, and check 8 fails until it is moved or deleted.
+
+**The sandbox.** Bootstrap asked whether shell commands run inside Claude Code's sandbox (question
+Q6). If you said yes, `.claude/settings.json` has a `sandbox` block. To let commands reach another
+address, add it to `sandbox.network.allowedDomains`:
+
+```json
+"sandbox": { "enabled": true, "network": { "allowedDomains": ["registry.npmjs.org", "github.com", "*.github.com", "api.stripe.com"] } }
+```
+
+To switch the sandbox on later, add that block and the ask rule
+`Bash(dangerouslyDisableSandbox:true)`, then restart Claude Code and run `/sandbox` to confirm it is
+running (Linux and WSL2 need `bubblewrap` and `socat`). No check enforces the sandbox, so removing it
+is a reviewed change to `settings.json`, not a failure. Without it, a command that reads files
+without naming them, such as `grep -r`, is not stopped by the guard or the `Read` deny rules.
 
 ---
 
@@ -202,6 +246,21 @@ plain `npm install` and `npm ci` need no allow rule, because the guard only asks
 name is given. `CONSENT_SAMPLES` lists the commands it tests against; add one when you add a deploy
 tool to the guard. When you add an ask or deny rule to `settings.json`, add it to the matching
 `REQUIRED_*` list too, so removing it later is caught.
+
+### Check 13: no hidden characters in AI instruction files
+
+**Built in.** Scans the files the AI reads as instructions, listed in `AI_INSTRUCTION_FILES`, for
+characters a reviewer cannot see: tag characters, zero-width and invisible characters, bidirectional
+controls, and variation selectors or joiners outside an emoji. It prints the file, line and code
+point, never the text. Ordinary emoji pass. If you keep instructions somewhere else (for example
+`docs/ai-rules.md`), add the path to `AI_INSTRUCTION_FILES` so it is scanned too.
+
+### Check 14: MCP servers are pinned
+
+**Built in.** Skipped when there is no `.mcp.json`. Each server must name an exact package version
+(`"args": ["-y", "@acme/docs-server@1.2.3"]`, or `acme-mcp==0.4.1` for `uvx`), a container image by
+digest (`acme/mcp@sha256:...`), or a remote address over https. To update a server, change the
+version in a reviewed pull request, the same way as any dependency.
 
 ### Check 9: no client names in the code
 
@@ -358,6 +417,15 @@ AGPL-3.0) suit your organisation before adopting them.
 
 Add any of these as an extra CI job or step. Pin each Action to a full commit SHA, as the rest of
 the workflow does, and keep secrets in repository secrets, never in the workflow file.
+
+### The software bill of materials
+
+Every CI run on GitHub attaches an `sbom` file: a CycloneDX list of every package in
+`package-lock.json`, with versions and licences. To check whether a project ships a package named in
+an advisory, open the latest run on `main`, download `sbom`, and search it for the name and version.
+To keep the files longer than the repository's artifact retention (90 days by default), raise
+`retention-days` on the upload step in `.github/workflows/ci.yml`. The step records; it does not
+block, so there is nothing to configure for it to pass.
 
 ---
 

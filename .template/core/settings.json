@@ -21,7 +21,16 @@
       "Edit(.github/CODEOWNERS)",
       "Edit(.gitleaks.toml)",
       "Edit(CLAUDE.md)",
-      "Edit(.claude/settings.json)"
+      "Edit(.claude/settings.json)",
+      "Edit(.mcp.json)",
+      "Edit(.guardrails/guard.log)",
+      "Edit(CLAUDE.local.md)",
+      "Edit(AGENTS.md)",
+      "Edit(.claude/agents/**)",
+      "Edit(.claude/skills/**)",
+      "Edit(.claude/commands/**)",
+      "Edit(.agents/**)",
+      "mcp__*"
     ],
     "deny": [
       "Read(.env)",
