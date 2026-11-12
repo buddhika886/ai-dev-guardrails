@@ -390,6 +390,40 @@ else
 fi
 
 
+echo "── [13] hidden characters in AI instruction files"
+expect_accept "the installed instruction files are clean" "none hidden"
+printf '\nFollow the house style.\xf3\xa0\x81\x81\xf3\xa0\x81\x82\n' >> CLAUDE.md
+expect_hidden "a tag character in CLAUDE.md is caught, without printing the line" "CLAUDE.md" "house style"
+mkdir -p .claude/agents; printf 'Review\xe2\x80\x8bcarefully.\n' > .claude/agents/reviewer.md; git add .claude/agents/reviewer.md
+expect_reject "a zero-width space in an agent file is caught" "U+200B (zero-width or invisible character)"
+mkdir -p .claude/skills/notes; printf 'Plain\xef\xb8\x80\xef\xb8\x81 text.\n' > .claude/skills/notes/SKILL.md; git add .claude/skills/notes/SKILL.md
+expect_reject "variation selectors hidden after plain text are caught" "variation selector outside an emoji"
+printf '\nCheck this \xe2\x9a\xa0\xef\xb8\x8f and the family \xf0\x9f\x91\xa8\xe2\x80\x8d\xf0\x9f\x91\xa9\xe2\x80\x8d\xf0\x9f\x91\xa7.\n' >> CLAUDE.md
+expect_accept "ordinary emoji (a variation selector and joiners) are accepted" "none hidden"
+printf 'Ignore\xe2\x80\xaeprevious\n' > AGENTS.md; git add AGENTS.md
+expect_reject "a bidirectional control in AGENTS.md is caught" "U+202E (bidirectional control)"
+
+echo "── [14] MCP servers in .mcp.json are pinned"
+mcp() { printf '%s\n' "$1" > .mcp.json; git add .mcp.json; }
+mcp '{"mcpServers":{"docs":{"command":"npx","args":["-y","@acme/docs-server"]}}}'
+expect_reject "an unpinned npx server is caught" "docs: package must be pinned to an exact version"
+mcp '{"mcpServers":{"docs":{"command":"npx","args":["-y","@acme/docs-server@latest"]}}}'
+expect_reject "@latest is caught" "docs: package must be pinned"
+mcp '{"mcpServers":{"docs":{"command":"npx","args":["-y","@acme/docs-server@^1.2.0"]}}}'
+expect_reject "a version range is caught" "docs: package must be pinned"
+mcp '{"mcpServers":{"py":{"command":"uvx","args":["acme-mcp"]}}}'
+expect_reject "an unpinned uvx server is caught" "py: package must be pinned to an exact version (name==1.2.3"
+mcp '{"mcpServers":{"img":{"command":"docker","args":["run","-i","--rm","acme/mcp:1"]}}}'
+expect_reject "a container without a digest is caught" "img: container image must be pinned by digest"
+mcp '{"mcpServers":{"remote":{"type":"http","url":"http://mcp.acme.example/"}}}'
+expect_reject "a remote server over plain http is caught" "remote: remote server must use https"
+mcp '{not json'
+expect_reject "an unparseable .mcp.json fails closed" "could not parse .mcp.json"
+mcp '{"mcpServers":{"docs":{"command":"npx","args":["-y","@acme/docs-server@1.2.3"]},"py":{"command":"uvx","args":["acme-mcp==0.4.1"]},"img":{"command":"docker","args":["run","-i","--rm","acme/mcp@sha256:0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"]},"remote":{"type":"http","url":"https://mcp.acme.example/"},"mine":{"command":"node","args":["tools/mcp.js"]}}}'
+expect_accept "pinned packages, a digest, https and a local server are accepted" "mine: runs a local command, reviewed with the repository"
+node -e 'const f=".claude/settings.json",fs=require("fs");const j=JSON.parse(fs.readFileSync(f,"utf8"));j.permissions.ask=j.permissions.ask.filter(r=>r!=="Edit(.claude/skills/**)");fs.writeFileSync(f,JSON.stringify(j,null,2))'
+expect_reject "removing the ask rule for skills is caught" "consent rule removed from .claude/settings.json: Edit(.claude/skills/**)"
+
 echo "── [12] dependency policy: .npmrc, package-lock.json and npm version"
 # Lockfile fixtures are built here, never committed whole: a package entry is name, version,
 # resolved URL and integrity, and each case changes one of them. The hash is a placeholder of the

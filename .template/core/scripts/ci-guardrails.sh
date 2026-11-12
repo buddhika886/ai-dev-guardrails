@@ -44,6 +44,9 @@ DENYLIST_FILE='.guardrails/denylist.local'
 # here, password included, so the file must never be committed (public repositories have leaked
 # thousands of credentials this way). Checked by [1] whatever SECRET_FILE_PATTERNS says.
 AGENT_LOCAL_FILES='(^|/)\.claude/settings\.local\.json$'
+# Files the AI reads as instructions, or that add tools it can call (JavaScript regex on the path).
+# Check [13] scans them for hidden characters; the ask rules and CODEOWNERS protect them from edits.
+AI_INSTRUCTION_FILES='(^|/)(CLAUDE|AGENTS|GEMINI)(\.local)?\.md$|^\.claude/|^\.agents/|^\.mcp\.json$|^\.cursor/|\.mdc$|^\.github/copilot-instructions\.md$'
 # Credential shapes that must not sit inside a saved permission rule, one "label<TAB>regex" per line
 # (JavaScript regex, case-insensitive). A value that is a variable reference ($NAME) is not a
 # credential and is not matched. Checked by [8]; the rule itself is never printed.
@@ -104,6 +107,12 @@ Edit(CLAUDE.md)
 Edit(.claude/settings.json)
 Edit(.mcp.json)
 Edit(.guardrails/guard.log)
+Edit(CLAUDE.local.md)
+Edit(AGENTS.md)
+Edit(.claude/agents/**)
+Edit(.claude/skills/**)
+Edit(.claude/commands/**)
+Edit(.agents/**)
 mcp__*'
 REQUIRED_DENY_RULES='Read(.env)
 Read(.env.*)
@@ -629,6 +638,113 @@ else
     else
       fail "npm $npm_v ignores min-release-age, so the cooldown is not enforced: upgrade to npm $NPM_MIN_VERSION or later (Node 24 ships it)"
     fi
+  fi
+fi
+
+# [13] Hidden characters in the files the AI reads as instructions. Invisible Unicode can carry an
+# instruction a reviewer never sees (OWASP GenAI LLM Top 10 2026, LLM01). Reported by file, line
+# and code point only, never the text around it. Emoji keep working: a single variation selector
+# after a symbol, and a zero-width joiner between two symbols, are how emoji are spelled.
+echo "[13] No hidden characters in AI instruction files"
+if ! command -v node >/dev/null 2>&1; then
+  fail "node is not on PATH, so the instruction files cannot be checked (failing closed)"
+else
+  # SC2016: the single-quoted block is JavaScript; its $ characters are regex and template syntax.
+  # shellcheck disable=SC2016
+  if hidden=$({ git ls-files --cached --others --exclude-standard; if [ -f CLAUDE.local.md ]; then echo CLAUDE.local.md; fi; } | FILES_RE="$AI_INSTRUCTION_FILES" node -e '
+    const fs = require("fs")
+    const re = new RegExp(process.env.FILES_RE)
+    const paths = [...new Set(require("fs").readFileSync(0, "utf8").split("\n").filter((p) => p && re.test(p)))]
+    const isVS = (c) => (c >= 0xfe00 && c <= 0xfe0f)
+    const ascii = (c) => c !== undefined && c < 0x80
+    const kind = (c, prev, next) => {
+      if (c >= 0xe0000 && c <= 0xe007f) return "tag character"
+      if (c >= 0xe0100 && c <= 0xe01ef) return "variation selector (supplementary)"
+      if (c === 0x200b || c === 0x200c || (c >= 0x2060 && c <= 0x2064) || c === 0x00ad) return "zero-width or invisible character"
+      if ((c >= 0x202a && c <= 0x202e) || (c >= 0x2066 && c <= 0x2069)) return "bidirectional control"
+      if (c === 0x200d && (prev === undefined || next === undefined || ascii(prev) || ascii(next))) return "zero-width joiner outside an emoji"
+      if (isVS(c) && (prev === undefined || ascii(prev) || isVS(prev))) return "variation selector outside an emoji"
+      return null
+    }
+    const hits = []
+    let scanned = 0
+    for (const p of paths) {
+      if (!fs.existsSync(p) || !fs.statSync(p).isFile()) continue
+      scanned++
+      const lines = fs.readFileSync(p, "utf8").split("\n")
+      lines.forEach((line, i) => {
+        const cps = Array.from(line, (ch) => ch.codePointAt(0))
+        cps.forEach((c, j) => {
+          if (c === 0xfeff && i === 0 && j === 0) return
+          const k = c === 0xfeff ? "byte-order mark mid-file" : kind(c, cps[j - 1], cps[j + 1])
+          if (k) hits.push(`${p}:${i + 1} U+${c.toString(16).toUpperCase().padStart(4, "0")} (${k})`)
+        })
+      })
+    }
+    process.stdout.write(hits.length ? hits.map((h) => "ERR " + h).join("\n") : "OK " + scanned)
+  ' 2>&1); then
+    case "$hidden" in
+      "OK "*) ok "${hidden#OK } instruction file(s) scanned, none hidden" ;;
+      *) fail "hidden character(s) in AI instruction files (remove them; the text is not printed here):"
+         sed -n 's/^ERR /      /p' <<< "$hidden" ;;
+    esac
+  else
+    fail "could not scan the instruction files (failing closed):"; echo "$hidden" | sed 's/^/      /'
+  fi
+fi
+
+# [14] MCP servers in .mcp.json are pinned. A server launched as `npx -y some-server` runs whatever
+# version is newest at that moment, so a hijacked release reaches the AI's tools the same day
+# (OWASP GenAI LLM Top 10 2026, LLM01 and LLM04). Package runners need an exact version, Docker
+# images a digest, and remote servers https. A server run from code in this repository is reviewed
+# like any other code and passes.
+if [ ! -f .mcp.json ]; then
+  skipped "[14] MCP servers pinned" "no .mcp.json"
+else
+  echo "[14] MCP servers pinned (.mcp.json)"
+  if ! command -v node >/dev/null 2>&1; then
+    fail "node is not on PATH, so .mcp.json cannot be checked (failing closed)"
+  else
+  # SC2016: the single-quoted block is JavaScript; its $ characters are regex and template syntax.
+  # shellcheck disable=SC2016
+  if mcp=$(node -e '
+    const j = JSON.parse(require("fs").readFileSync(".mcp.json", "utf8"))
+    const servers = j.mcpServers || {}
+    const exactNpm = /^(@[a-z0-9._~-]+\/)?[a-z0-9._~-]+@\d+\.\d+\.\d+([-+][0-9A-Za-z.-]+)?$/i
+    const exactPy = /^[A-Za-z0-9._-]+(\[[A-Za-z0-9,._-]+\])?==\d+(\.\d+)*([a-z0-9.+-]*)?$/i
+    const local = /^(https?:\/\/)?(localhost|127\.0\.0\.1|\[::1\])([:/]|$)/i
+    const oks = [], errs = []
+    const firstPositional = (args) => args.find((a) => typeof a === "string" && !a.startsWith("-"))
+    for (const [name, s] of Object.entries(servers)) {
+      const args = Array.isArray(s.args) ? s.args : []
+      const cmd = String(s.command || "").split("/").pop()
+      if (s.url) {
+        if (/^https:\/\//i.test(s.url) || local.test(s.url)) oks.push(`${name}: remote server over https`)
+        else errs.push(`${name}: remote server must use https`)
+        continue
+      }
+      let pkg = null, py = false
+      if (cmd === "npx" || cmd === "bunx") pkg = firstPositional(args)
+      else if ((cmd === "pnpm" || cmd === "yarn") && args.includes("dlx")) pkg = firstPositional(args.slice(args.indexOf("dlx") + 1))
+      else if (cmd === "uvx") { pkg = firstPositional(args); py = true }
+      else if (cmd === "pipx" && args.includes("run")) { pkg = firstPositional(args.slice(args.indexOf("run") + 1)); py = true }
+      else if (cmd === "docker" || cmd === "podman") {
+        if (args.some((a) => typeof a === "string" && /@sha256:[0-9a-f]{64}$/.test(a))) oks.push(`${name}: image pinned by digest`)
+        else errs.push(`${name}: container image must be pinned by digest (image@sha256:...)`)
+        continue
+      } else { oks.push(`${name}: runs a local command, reviewed with the repository`); continue }
+      if (pkg && (py ? exactPy : exactNpm).test(pkg)) oks.push(`${name}: pinned to an exact version`)
+      else errs.push(`${name}: package must be pinned to an exact version (${py ? "name==1.2.3" : "name@1.2.3"}), not latest or a range`)
+    }
+    if (!Object.keys(servers).length) oks.push("no servers listed")
+    process.stdout.write([...oks.map((l) => "OK " + l), ...errs.map((l) => "ERR " + l)].join("\n"))
+  ' 2>&1); then
+    while IFS= read -r line; do
+      case "$line" in "OK "*) ok "${line#OK }" ;; "ERR "*) fail "${line#ERR }" ;; esac
+    done <<< "$mcp"
+  else
+    fail "could not parse .mcp.json (failing closed):"; echo "$mcp" | sed 's/^/      /'
+  fi
   fi
 fi
 

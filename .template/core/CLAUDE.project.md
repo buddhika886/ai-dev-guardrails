@@ -130,6 +130,11 @@ An MCP server gives the AI new tools, and those tools run outside the bash guard
   Project servers live in `.mcp.json`; changing it asks every time and needs an owner's review.
 - Every MCP tool call asks first (`mcp__*`). Approve each call on what it does, not on the server's
   name. Never set `enableAllProjectMcpServers`; guardrail check [8] fails if it is on.
+- Pin every server to an exact version (`@acme/docs-server@1.2.3`, never `@latest`), a container
+  image to its digest, and use https for remote servers. Guardrail check [14] fails otherwise.
+- The AI's instruction files (`CLAUDE.md`, `CLAUDE.local.md`, `AGENTS.md`, `.claude/agents/`,
+  `.claude/skills/`, `.claude/commands/`) shape every later session. Editing them asks every time,
+  and check [13] fails on hidden characters in them.
 
 ## Evidence standard (hard rule)
 

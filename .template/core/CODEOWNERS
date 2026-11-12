@@ -12,3 +12,8 @@
 /.npmrc {{CODEOWNERS}}
 /CLAUDE.md {{CODEOWNERS}}
 /.mcp.json {{CODEOWNERS}}
+/AGENTS.md {{CODEOWNERS}}
+/.claude/agents/ {{CODEOWNERS}}
+/.claude/skills/ {{CODEOWNERS}}
+/.claude/commands/ {{CODEOWNERS}}
+/.agents/ {{CODEOWNERS}}

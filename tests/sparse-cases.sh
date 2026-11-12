@@ -26,7 +26,8 @@ for want in \
   "[6] Built-bundle secret scan: SKIPPED" \
   "[7] Schema-truth check: SKIPPED" \
   "[9] Client denylist: SKIPPED" \
-  "[11] Governance records: SKIPPED"
+  "[11] Governance records: SKIPPED" \
+  "[14] MCP servers pinned: SKIPPED"
 do
   if grep -qF "$want" <<<"$out"; then
     t_pass "reported: $want"
@@ -42,12 +43,12 @@ if grep -i 'skipped' <<<"$out" | grep -qF '✓'; then
 else
   t_pass "no SKIPPED line is marked as verified"
 fi
-# All twelve checks accounted for, so a reader of the log can audit coverage.
-seen=$(grep -cE '^\[([1-9]|1[012])\]' <<<"$out")
-if [ "$seen" -eq 12 ]; then
-  t_pass "all twelve checks appear in the output"
+# All fourteen checks accounted for, so a reader of the log can audit coverage.
+seen=$(grep -cE '^\[([1-9]|1[0-4])\]' <<<"$out")
+if [ "$seen" -eq 14 ]; then
+  t_pass "all fourteen checks appear in the output"
 else
-  t_fail "only $seen of 12 checks reported themselves" "$out"
+  t_fail "only $seen of 14 checks reported themselves" "$out"
 fi
 # Governance off: none of its files or pointers may appear.
 if [ ! -e docs/governance ] && [ ! -e .github/pull_request_template.md ] && ! grep -q 'docs/governance' CLAUDE.md; then

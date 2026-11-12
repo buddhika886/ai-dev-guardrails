@@ -247,6 +247,21 @@ name is given. `CONSENT_SAMPLES` lists the commands it tests against; add one wh
 tool to the guard. When you add an ask or deny rule to `settings.json`, add it to the matching
 `REQUIRED_*` list too, so removing it later is caught.
 
+### Check 13: no hidden characters in AI instruction files
+
+**Built in.** Scans the files the AI reads as instructions, listed in `AI_INSTRUCTION_FILES`, for
+characters a reviewer cannot see: tag characters, zero-width and invisible characters, bidirectional
+controls, and variation selectors or joiners outside an emoji. It prints the file, line and code
+point, never the text. Ordinary emoji pass. If you keep instructions somewhere else (for example
+`docs/ai-rules.md`), add the path to `AI_INSTRUCTION_FILES` so it is scanned too.
+
+### Check 14: MCP servers are pinned
+
+**Built in.** Skipped when there is no `.mcp.json`. Each server must name an exact package version
+(`"args": ["-y", "@acme/docs-server@1.2.3"]`, or `acme-mcp==0.4.1` for `uvx`), a container image by
+digest (`acme/mcp@sha256:...`), or a remote address over https. To update a server, change the
+version in a reviewed pull request, the same way as any dependency.
+
 ### Check 9: no client names in the code
 
 **Files:** `.guardrails/denylist.local` on your machine (gitignored) and the `GUARDRAILS_DENYLIST`
