@@ -74,4 +74,16 @@ while IFS= read -r line; do
   documented ".gitignore entry" "$line" "\`$line\`"
 done < <(grep -oE "^ensure_ignored '[^']+'" tests/install.sh | cut -d"'" -f2)
 
+echo "── the OWASP mapping covers every risk and cites only real checks"
+MAP=docs/owasp-mapping.md
+for n in 01 02 03 04 05 06 07 08 09 10; do
+  if grep -qE "^### LLM$n " "$MAP"; then t_pass "OWASP mapping: LLM$n has a section"
+  else t_fail "OWASP mapping: LLM$n has no section in $MAP"; fi
+done
+max=$(grep -oE '"\[[0-9]+\]' "$T/scripts/ci-guardrails.sh" | tr -d '"[]' | sort -n | tail -1)
+while IFS= read -r n; do
+  if [ "$n" -le "$max" ]; then t_pass "OWASP mapping: check $n exists"
+  else t_fail "OWASP mapping cites check $n, but the checks stop at $max"; fi
+done < <(grep -oE '[Cc]heck [0-9]+' "$MAP" | grep -oE '[0-9]+' | sort -un)
+
 t_summary "CONTROLS DOC CASES"

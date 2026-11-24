@@ -3,7 +3,8 @@
 The complete list of controls in this project: every block, prompt, check, scan, policy and setting,
 where each one is enforced, when it runs, what proves it works, and where it stops. For why each one
 exists, see [why-these-rules.md](why-these-rules.md); for how to change one, see
-[configuring-rules.md](configuring-rules.md).
+[configuring-rules.md](configuring-rules.md); for how they map to the OWASP GenAI LLM Top 10 2026,
+see [owasp-mapping.md](owasp-mapping.md).
 
 The template's test suite fails if a control exists in the code but is missing from this page, so
 the list cannot quietly fall behind.
