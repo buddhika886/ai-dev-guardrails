@@ -193,6 +193,8 @@ shows each change with an example.
 - [The five layers](docs/five-layers.md): how the safety nets fit together and why each exists.
 - [Every control](docs/security-controls.md): the complete list, where each is enforced, what proves
   it works and where it stops. A test keeps this page complete.
+- [OWASP mapping](docs/owasp-mapping.md): how the controls line up against the OWASP GenAI LLM Top
+  10 2026, risk by risk, with the gaps stated.
 - [Why these rules](docs/why-these-rules.md): each rule in plain language, with the real incidents
   behind it.
 - [Changing the rules](docs/configuring-rules.md): every setting, with examples; the governance
